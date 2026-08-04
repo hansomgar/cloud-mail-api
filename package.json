@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm run build",
     "build": "npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build",
     "deploy": "wrangler deploy"
   },
