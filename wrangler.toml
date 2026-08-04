@@ -1,0 +1,40 @@
+name = "cloud-mail-api"
+main = "mail-worker/src/index.js"
+compatibility_date = "2025-06-04"
+keep_vars = true
+
+[observability]
+enabled = true
+
+[[routes]]
+pattern = "mail.airoute.kdns.fr"
+custom_domain = true
+
+[[d1_databases]]
+binding = "db"
+database_name = "cloud-mail-api"
+database_id = "a99b0859-0c89-49de-8af1-a19b45c94e2c"
+
+[[kv_namespaces]]
+binding = "kv"
+id = "2a56f3742be04a37a0fdf8e359023ca4"
+
+[ai]
+binding = "ai"
+
+[assets]
+binding = "assets"
+directory = "./mail-worker/dist"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[triggers]
+crons = ["0 16 * * *"]
+
+[vars]
+domain = ["mail.airoute.kdns.fr"]
+admin = "admin@mail.airoute.kdns.fr"
+project_link = "https://github.com/hansomgar/cloud-mail-api"
+
+[build]
+command = "npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build"
