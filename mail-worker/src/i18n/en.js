@@ -62,7 +62,6 @@ const en = {
 	noDomainPermReg: "No permission to register this domain email",
 	noDomainPermRegKey: "Registration code not valid for this domain",
 	noDomainPermSend: "No permission to send from this domain email",
-	publicTokenFail: 'Token validation failed',
 	notAdmin: 'The entered email is not an administrator email',
 	emailExistDatabase: 'Email already exists in the database',
 	notConfigOss: 'Object storage not configured',

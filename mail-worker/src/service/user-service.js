@@ -17,6 +17,7 @@ import constant from '../const/constant';
 import { t } from '../i18n/i18n'
 import reqUtils from '../utils/req-utils';
 import {oauth} from "../entity/oauth";
+import apiKey from '../entity/api-key';
 import oauthService from "./oauth-service";
 
 const userService = {
@@ -101,10 +102,29 @@ const userService = {
 
 	async physicsDelete(c, params) {
 		let { userIds } = params;
-		userIds = userIds.split(',').map(Number);
+		userIds = [...new Set(
+			String(userIds || '')
+				.split(',')
+				.map(Number)
+				.filter(userId => Number.isInteger(userId) && userId > 0)
+		)];
+
+		if (userIds.length === 0) {
+			throw new BizError('Invalid user IDs');
+		}
+
+		const adminUser = await this.selectByEmailIncludeDel(c, c.env.admin);
+		if (adminUser && userIds.includes(adminUser.userId)) {
+			throw new BizError('The administrator account cannot be deleted', 403);
+		}
+
 		await accountService.physicsDeleteByUserIds(c, userIds);
 		await oauthService.deleteByUserIds(c, userIds);
+		await orm(c).delete(apiKey).where(inArray(apiKey.userId, userIds)).run();
 		await orm(c).delete(user).where(inArray(user.userId, userIds)).run();
+		await Promise.all(
+			userIds.map(userId => c.env.kv.delete(KvConst.AUTH_INFO + userId))
+		);
 	},
 
 	async list(c, params) {
@@ -324,7 +344,7 @@ const userService = {
 			throw new BizError(t('isRegAccount'));
 		}
 
-		const role = roleService.selectById(c, type);
+		const role = await roleService.selectById(c, type);
 
 		if (!role) {
 			throw new BizError(t('roleNotExist'));

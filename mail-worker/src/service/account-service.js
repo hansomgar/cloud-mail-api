@@ -15,9 +15,10 @@ import verifyRecordService from './verify-record-service';
 
 const accountService = {
 
-	async add(c, params, userId) {
+	async add(c, params, userId, options = {}) {
 
 		const { addEmailVerify , addEmail, manyEmail, addVerifyCount, minEmailPrefix, emailPrefixFilter } = await settingService.query(c);
+		const skipHumanVerification = options.skipHumanVerification === true;
 
 		let { email, token } = params;
 
@@ -75,12 +76,12 @@ const accountService = {
 
 		let addVerifyOpen = false
 
-		if (addEmailVerify === settingConst.addEmailVerify.OPEN) {
+		if (!skipHumanVerification && addEmailVerify === settingConst.addEmailVerify.OPEN) {
 			addVerifyOpen = true
 			await turnstileService.verify(c, token);
 		}
 
-		if (addEmailVerify === settingConst.addEmailVerify.COUNT) {
+		if (!skipHumanVerification && addEmailVerify === settingConst.addEmailVerify.COUNT) {
 			addVerifyOpen = await verifyRecordService.isOpenAddVerify(c, addVerifyCount);
 			if (addVerifyOpen) {
 				await turnstileService.verify(c,token)
@@ -90,7 +91,7 @@ const accountService = {
 
 		accountRow = await orm(c).insert(account).values({ email: email, userId: userId, name: emailUtils.getName(email) }).returning().get();
 
-		if (addEmailVerify === settingConst.addEmailVerify.COUNT && !addVerifyOpen) {
+		if (!skipHumanVerification && addEmailVerify === settingConst.addEmailVerify.COUNT && !addVerifyOpen) {
 			const row = await verifyRecordService.increaseAddCount(c);
 			addVerifyOpen = row.count >= addVerifyCount
 		}

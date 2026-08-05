@@ -61,6 +61,18 @@
                              v-model="setting.manyEmail"/>
                 </div>
               </div>
+              <div v-if="userStore.user.type === 0" class="setting-item">
+                <div>
+                  <span>{{ $t('restApiAccess') }}</span>
+                  <el-tooltip effect="dark" :content="$t('restApiAccessDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div>
+                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
+                             v-model="setting.restApiEnabled"/>
+                </div>
+              </div>
               <div class="setting-item">
                 <div>
                   <span>{{ $t('emailPrefix') }}</span>
@@ -1443,6 +1455,9 @@ function change(e) {
   delete settingForm.s3SecretKey
   delete settingForm.tgBotToken
   delete settingForm.resendTokens
+  if (userStore.user.type !== 0) {
+    delete settingForm.restApiEnabled
+  }
   editSetting(settingForm, false)
 }
 

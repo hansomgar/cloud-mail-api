@@ -49,4 +49,4 @@ project_link = "https://github.com/hansomgar/cloud-mail-api"
 #jwt_secret = ""			#jwt令牌的密钥,随便填一串字符串
 
 [build]
-command = "npx --yes pnpm@9.15.9 --prefix ../mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ../mail-vue run build"
+command = "node ../scripts/verify-cloudflare-target.mjs && npx --yes pnpm@9.15.9 --prefix ../mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ../mail-vue run build"

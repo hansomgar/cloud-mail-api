@@ -2,9 +2,17 @@ import app from '../hono/hono';
 import result from '../model/result';
 import settingService from '../service/setting-service';
 import userContext from "../security/user-context";
+import BizError from '../error/biz-error';
 
 app.put('/setting/set', async (c) => {
-	await settingService.set(c, await c.req.json());
+	const params = await c.req.json();
+	if (
+		Object.hasOwn(params || {}, 'restApiEnabled') &&
+		userContext.getUser(c).email !== c.env.admin
+	) {
+		throw new BizError('Only the administrator can change REST API access', 403);
+	}
+	await settingService.set(c, params);
 	return c.json(result.ok());
 });
 

@@ -10,6 +10,62 @@ import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 
+const WRITABLE_SETTING_FIELDS = new Set([
+	'register',
+	'receive',
+	'title',
+	'manyEmail',
+	'addEmail',
+	'autoRefresh',
+	'addEmailVerify',
+	'registerVerify',
+	'regVerifyCount',
+	'addVerifyCount',
+	'send',
+	'r2Domain',
+	'secretKey',
+	'siteKey',
+	'regKey',
+	'background',
+	'tgBotToken',
+	'tgChatId',
+	'tgBotStatus',
+	'forwardEmail',
+	'forwardStatus',
+	'ruleEmail',
+	'ruleType',
+	'loginOpacity',
+	'resendTokens',
+	'noticeTitle',
+	'noticeContent',
+	'noticeType',
+	'noticeDuration',
+	'noticePosition',
+	'noticeOffset',
+	'noticeWidth',
+	'notice',
+	'noRecipient',
+	'loginDomain',
+	'bucket',
+	'region',
+	'endpoint',
+	's3AccessKey',
+	's3SecretKey',
+	'forcePathStyle',
+	'customDomain',
+	'tgMsgFrom',
+	'tgMsgTo',
+	'tgMsgText',
+	'minEmailPrefix',
+	'emailPrefixFilter',
+	'blackSubject',
+	'blackContent',
+	'blackFrom',
+	'aiCode',
+	'aiCodeFilter',
+	'restApiEnabled'
+]);
+
 const settingService = {
 
 	async refresh(c) {
@@ -29,6 +85,10 @@ const settingService = {
 
 		if (!setting) {
 			throw new BizError('数据库未初始化 Database not initialized.');
+		}
+
+		if (setting.restApiEnabled === undefined) {
+			setting.restApiEnabled = 1;
 		}
 
 		let domainList = c.env.domain;
@@ -125,22 +185,33 @@ const settingService = {
 	},
 
 	async set(c, params) {
+		const safeParams = Object.fromEntries(
+			Object.entries(params || {}).filter(([key]) => WRITABLE_SETTING_FIELDS.has(key))
+		);
+
+		if (Object.keys(safeParams).length === 0) {
+			throw new BizError('No writable setting fields supplied', 400);
+		}
+
 		const settingData = await this.query(c);
-		let resendTokens = { ...settingData.resendTokens, ...params.resendTokens };
+		const resendTokens = {
+			...settingData.resendTokens,
+			...(safeParams.resendTokens || {})
+		};
 		Object.keys(resendTokens).forEach(domain => {
 			if (!resendTokens[domain]) delete resendTokens[domain];
 		});
 
-		if (Array.isArray(params.emailPrefixFilter)) {
-			params.emailPrefixFilter = params.emailPrefixFilter + '';
+		if (Array.isArray(safeParams.emailPrefixFilter)) {
+			safeParams.emailPrefixFilter = safeParams.emailPrefixFilter + '';
 		}
 
-		if (Array.isArray(params.aiCodeFilter)) {
-			params.aiCodeFilter = params.aiCodeFilter + '';
+		if (Array.isArray(safeParams.aiCodeFilter)) {
+			safeParams.aiCodeFilter = safeParams.aiCodeFilter + '';
 		}
 
-		params.resendTokens = JSON.stringify(resendTokens);
-		await orm(c).update(setting).set({ ...params }).returning().get();
+		safeParams.resendTokens = JSON.stringify(resendTokens);
+		await orm(c).update(setting).set(safeParams).returning().get();
 		await this.refresh(c);
 	},
 
@@ -232,7 +303,8 @@ const settingService = {
 			linuxdoCallbackUrl: settingRow.linuxdoCallbackUrl,
 			linuxdoSwitch: settingRow.linuxdoSwitch,
 			minEmailPrefix: settingRow.minEmailPrefix,
-			projectLink: settingRow.projectLink
+			projectLink: settingRow.projectLink,
+			restApiEnabled: settingRow.restApiEnabled
 		};
 	},
 

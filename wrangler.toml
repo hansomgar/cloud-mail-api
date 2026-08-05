@@ -39,4 +39,4 @@ admin = "admin@mail.airoute.kdns.fr"
 project_link = "https://github.com/hansomgar/cloud-mail-api"
 
 [build]
-command = "npx --yes pnpm@9.15.9 --prefix ./mail-worker install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build"
+command = "node ./scripts/verify-cloudflare-target.mjs && npx --yes pnpm@9.15.9 --prefix ./mail-worker install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build"

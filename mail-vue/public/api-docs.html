@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Mail REST API</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --code: #111827;
+      --code-text: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --border: #334155;
+        --primary: #60a5fa;
+        --code: #020617;
+        --code-text: #e2e8f0;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 36px auto 80px;
+    }
+
+    header,
+    section {
+      padding: 24px;
+      margin-bottom: 18px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.25;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 5vw, 42px);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    a {
+      color: var(--primary);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      margin-right: 8px;
+      color: #ffffff;
+      background: #16a34a;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    code {
+      padding: 2px 6px;
+      background: color-mix(in srgb, var(--primary) 12%, transparent);
+      border-radius: 5px;
+    }
+
+    pre {
+      padding: 16px;
+      overflow: auto;
+      color: var(--code-text);
+      background: var(--code);
+      border-radius: 10px;
+    }
+
+    pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 11px 10px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      white-space: nowrap;
+    }
+
+    .method {
+      display: inline-block;
+      min-width: 58px;
+      padding: 2px 7px;
+      color: #ffffff;
+      text-align: center;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .get {
+      background: #2563eb;
+    }
+
+    .post {
+      background: #16a34a;
+    }
+
+    .patch {
+      background: #d97706;
+    }
+
+    .delete {
+      background: #dc2626;
+    }
+
+    .notice {
+      padding: 14px 16px;
+      margin-top: 14px;
+      color: #92400e;
+      background: #fef3c7;
+      border-radius: 9px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .notice {
+        color: #fde68a;
+        background: #451a03;
+      }
+    }
+
+    @media (max-width: 700px) {
+      main {
+        width: min(100% - 18px, 960px);
+        margin-top: 10px;
+      }
+
+      header,
+      section {
+        padding: 18px;
+        border-radius: 10px;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="badge">v1</span>
+    <h1>Cloud Mail REST API</h1>
+    <p class="muted">通过 API Key 管理当前用户自己的邮箱账号、邮件与附件。</p>
+    <p>
+      Base URL：<code>https://mail.airoute.kdns.fr/api/v1</code>
+      · <a href="/openapi.json">OpenAPI 3.1 JSON</a>
+    </p>
+  </header>
+
+  <section>
+    <h2>1. 开启与创建 API Key</h2>
+    <ol>
+      <li>超级管理员在“系统设置”中开启“用户 REST API”。</li>
+      <li>用户进入“个人设置 → API Key”。</li>
+      <li>创建一个命名 Key，例如“家中服务器”或“手机自动化”。</li>
+      <li>立即复制完整 Key；完整内容只显示一次。</li>
+    </ol>
+    <div class="notice">
+      管理员关闭 REST API 后，所有 Key 会立即暂停使用；重新开启后，未吊销的 Key 会恢复。
+      每个 Key 可单独吊销。
+    </div>
+  </section>
+
+  <section>
+    <h2>2. 鉴权</h2>
+    <p>每个请求都必须携带标准 Bearer 请求头：</p>
+    <pre><code>Authorization: Bearer cma_PUBLIC_ID_SECRET</code></pre>
+    <p>示例：</p>
+    <pre><code>curl --request GET \
+  --url "https://mail.airoute.kdns.fr/api/v1/accounts" \
+  --header "Authorization: Bearer YOUR_API_KEY"</code></pre>
+    <p class="muted">
+      API Key 只能操作所属用户自己的数据。猜测其他用户的 accountId、emailId 或 attachmentId
+      会返回 404。
+    </p>
+  </section>
+
+  <section>
+    <h2>3. 端点</h2>
+    <table>
+      <thead>
+      <tr>
+        <th>方法</th>
+        <th>路径</th>
+        <th>说明</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/me</code></td>
+        <td>当前 API Key 所属用户</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/accounts</code></td>
+        <td>分页查询自己的邮箱账号</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/accounts</code></td>
+        <td>创建自己的子邮箱账号</td>
+      </tr>
+      <tr>
+        <td><span class="method patch">PATCH</span></td>
+        <td><code>/accounts/{accountId}</code></td>
+        <td>修改账号名称或聚合收件设置</td>
+      </tr>
+      <tr>
+        <td><span class="method delete">DELETE</span></td>
+        <td><code>/accounts/{accountId}</code></td>
+        <td>删除自己的子账号；主账号不可删除</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/emails</code></td>
+        <td>查询邮件摘要，支持游标、账号、收发类型和已读状态筛选</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/emails/{emailId}</code></td>
+        <td>读取单封邮件正文</td>
+      </tr>
+      <tr>
+        <td><span class="method patch">PATCH</span></td>
+        <td><code>/emails/{emailId}/read</code></td>
+        <td>标记邮件已读</td>
+      </tr>
+      <tr>
+        <td><span class="method delete">DELETE</span></td>
+        <td><code>/emails/{emailId}</code></td>
+        <td>软删除邮件</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/emails/{emailId}/attachments</code></td>
+        <td>查询附件元数据</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/emails/{emailId}/attachments/{attachmentId}</code></td>
+        <td>经过所有权校验后下载附件</td>
+      </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. 常用请求</h2>
+
+    <h3>创建子邮箱</h3>
+    <pre><code>curl --request POST \
+  --url "https://mail.airoute.kdns.fr/api/v1/accounts" \
+  --header "Authorization: Bearer YOUR_API_KEY" \
+  --header "Content-Type: application/json" \
+  --data '{"email":"automation@mail.airoute.kdns.fr"}'</code></pre>
+
+    <h3>查询邮件</h3>
+    <pre><code>curl --request GET \
+  --url "https://mail.airoute.kdns.fr/api/v1/emails?limit=20" \
+  --header "Authorization: Bearer YOUR_API_KEY"</code></pre>
+
+    <h3>读取单封邮件</h3>
+    <pre><code>curl --request GET \
+  --url "https://mail.airoute.kdns.fr/api/v1/emails/123" \
+  --header "Authorization: Bearer YOUR_API_KEY"</code></pre>
+
+    <h3>删除邮件</h3>
+    <pre><code>curl --request DELETE \
+  --url "https://mail.airoute.kdns.fr/api/v1/emails/123" \
+  --header "Authorization: Bearer YOUR_API_KEY"</code></pre>
+  </section>
+
+  <section>
+    <h2>5. 分页与状态码</h2>
+    <ul>
+      <li>默认每页 20 条，<code>limit</code> 最大为 50。</li>
+      <li>账号列表使用向前游标；邮件列表使用降序 emailId 游标。</li>
+      <li><code>400</code> 参数错误；<code>401</code> Key 无效或已吊销。</li>
+      <li><code>403</code> REST API 已关闭或用户被禁用。</li>
+      <li><code>404</code> 资源不存在或不属于当前用户。</li>
+      <li><code>409</code> 资源冲突，例如尝试删除主邮箱账号。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>6. 安全建议</h2>
+    <ul>
+      <li>不同设备或程序使用不同的命名 Key。</li>
+      <li>不要把 Key 写入 Git、前端源码、公开日志或 URL 查询参数。</li>
+      <li>怀疑泄露时立即在个人设置中吊销对应 Key。</li>
+      <li>服务端只保存 Key 哈希；完整 Key 无法找回，只能重新创建。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

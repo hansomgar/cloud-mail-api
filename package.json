@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "postinstall": "npm run build",
-    "build": "npx --yes pnpm@9.15.9 --prefix ./mail-worker install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build",
-    "deploy": "wrangler deploy"
+    "verify:target": "node ./scripts/verify-cloudflare-target.mjs",
+    "build": "npm run verify:target && npx --yes pnpm@9.15.9 --prefix ./mail-worker install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue install --frozen-lockfile && npx --yes pnpm@9.15.9 --prefix ./mail-vue run build",
+    "deploy": "npm run verify:target && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.90.0"

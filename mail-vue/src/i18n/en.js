@@ -336,7 +336,31 @@ const en = {
     searchUser: 'Search by user',
     searchEmail: 'Search by Email',
     searchSender: 'Search by Sender',
-    userEmail: 'Email Address'
+    userEmail: 'Email Address',
+    restApi: 'REST API',
+    restApiAccess: 'User REST API',
+    restApiAccessDesc: 'When enabled, users can create API keys and manage their own mailboxes, messages, and attachments over HTTP',
+    restApiDisabledDesc: 'The administrator has disabled REST API access. Existing keys are temporarily unavailable.',
+    apiKeys: 'API Keys',
+    apiKeyName: 'Key Name',
+    apiKeyNamePlaceholder: 'For example: Home Server',
+    createApiKey: 'Create API Key',
+    apiKeyOneTimeTitle: 'Save Your API Key Now',
+    apiKeyOneTimeDesc: 'The complete key is shown only once. After closing this dialog, it cannot be viewed again.',
+    apiKeyCopySuccess: 'API key copied',
+    apiKeyCreated: 'API key created',
+    apiKeyRevoked: 'API key revoked',
+    revokeApiKey: 'Revoke',
+    revokeApiKeyConfirm: 'Revoke this API key? Programs using it will lose access immediately.',
+    apiKeyPrefix: 'Key Prefix',
+    apiKeyCreatedAt: 'Created',
+    apiKeyLastUsedAt: 'Last Used',
+    apiKeyNeverUsed: 'Never used',
+    apiKeyActive: 'Active',
+    apiKeyRevokedStatus: 'Revoked',
+    apiKeyLimitDesc: 'Each user can have up to {count} active keys',
+    noApiKeys: 'No API keys have been created',
+    apiDocs: 'API Documentation'
 }
 
 export default en
