@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://webmail.airoute.kdns.fr/api/v1",
+      "url": "https://mail.airoute.kdns.fr/api/v1",
       "description": "Production"
     }
   ],
@@ -56,7 +56,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/me\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/me\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -121,7 +121,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/accounts?limit=20\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts?limit=20\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       },
@@ -163,7 +163,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request POST \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/accounts\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '[\"batch-one@mail.airoute.kdns.fr\",{\"email\":\"batch-two@mail.airoute.kdns.fr\"}]'"
+            "source": "curl --request POST \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '[\"batch-one@mail.airoute.kdns.fr\",{\"email\":\"batch-two@mail.airoute.kdns.fr\"}]'"
           }
         ],
         "requestBody": {
@@ -238,7 +238,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request PATCH \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"name\":\"Automation\",\"allReceive\":0}'"
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"name\":\"Automation\",\"allReceive\":0}'"
           }
         ],
         "requestBody": {
@@ -309,7 +309,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request DELETE \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -434,7 +434,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails?cursor=999999&limit=20&accountName=admin&type=0&unread=0&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails?cursor=999999&limit=20&accountName=admin&type=0&unread=0&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       },
@@ -476,7 +476,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request DELETE \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"emailIds\":[123,124,125]}'"
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"emailIds\":[123,124,125]}'"
           }
         ],
         "requestBody": {
@@ -552,7 +552,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       },
@@ -606,7 +606,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request DELETE \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -662,7 +662,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request PATCH \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails/123/read\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/read\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -718,7 +718,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails/123/attachments\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/attachments\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -785,7 +785,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/emails/123/attachments/9\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/attachments/9\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -860,7 +860,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/users?limit=50&email=user%40\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users?limit=50&email=user%40\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       },
@@ -902,7 +902,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request POST \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/users\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"email\":\"new@mail.airoute.kdns.fr\",\"type\":1,\"password\":\"ChangeMe123!\"}'"
+            "source": "curl --request POST \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"email\":\"new@mail.airoute.kdns.fr\",\"type\":1,\"password\":\"ChangeMe123!\"}'"
           }
         ],
         "requestBody": {
@@ -976,7 +976,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request DELETE \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/users/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -1032,7 +1032,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request PATCH \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/users/2/account-limit\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"accountLimit\":20}'"
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users/2/account-limit\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"accountLimit\":20}'"
           }
         ],
         "requestBody": {
@@ -1163,7 +1163,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request GET \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/emails?limit=50&userEmail=user%40mail.airoute.kdns.fr&accountName=user%40mail.airoute.kdns.fr&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/emails?limit=50&userEmail=user%40mail.airoute.kdns.fr&accountName=user%40mail.airoute.kdns.fr&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
         ]
       }
@@ -1207,7 +1207,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request PATCH \\\n  --url \"https://webmail.airoute.kdns.fr/api/v1/admin/settings\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"restApiEnabled\":0,\"manyEmail\":0,\"addEmail\":0}'"
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/settings\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"restApiEnabled\":0,\"manyEmail\":0,\"addEmail\":0}'"
           }
         ],
         "requestBody": {

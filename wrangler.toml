@@ -9,8 +9,8 @@ preview_urls = true
 enabled = true
 
 [[routes]]
-pattern = "webmail.airoute.kdns.fr"
-custom_domain = true
+pattern = "mail.airoute.kdns.fr/*"
+zone_name = "airoute.kdns.fr"
 
 [[d1_databases]]
 binding = "db"

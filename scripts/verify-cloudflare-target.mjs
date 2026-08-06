@@ -6,7 +6,8 @@ const EXPECTED = Object.freeze({
 	databaseName: 'cloud-mail-api',
 	databaseId: 'a99b0859-0c89-49de-8af1-a19b45c94e2c',
 	kvNamespaceId: '2a56f3742be04a37a0fdf8e359023ca4',
-	domain: 'webmail.airoute.kdns.fr',
+	routePattern: 'mail.airoute.kdns.fr/*',
+	zoneName: 'airoute.kdns.fr',
 	mailDomains: ['mail.airoute.kdns.fr'],
 	admin: 'admin@mail.airoute.kdns.fr'
 });
@@ -77,10 +78,22 @@ for (const file of configs) {
 	requiredMatch(
 		content,
 		/^pattern\s*=\s*"([^"]+)"/m,
-		EXPECTED.domain,
-		'custom domain',
+		EXPECTED.routePattern,
+		'Worker route pattern',
 		relativeFile
 	);
+	requiredMatch(
+		content,
+		/^zone_name\s*=\s*"([^"]+)"/m,
+		EXPECTED.zoneName,
+		'Worker route zone',
+		relativeFile
+	);
+	if (/^custom_domain\s*=\s*true\s*$/m.test(content)) {
+		throw new Error(
+			`${relativeFile}: custom_domain mode is forbidden because it conflicts with mail MX`
+		);
+	}
 	requiredMatch(
 		content,
 		/^admin\s*=\s*"([^"]+)"/m,
