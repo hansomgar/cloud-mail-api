@@ -345,8 +345,8 @@ const en = {
     apiKeyName: 'Key Name',
     apiKeyNamePlaceholder: 'For example: Home Server',
     createApiKey: 'Create API Key',
-    apiKeyOneTimeTitle: 'Save Your API Key Now',
-    apiKeyOneTimeDesc: 'The complete key is shown only once. After closing this dialog, it cannot be viewed again.',
+    apiKeyOneTimeTitle: 'API Key',
+    apiKeyOneTimeDesc: 'The complete key is stored by the server and can be viewed again from the API Key page.',
     apiKeyCopySuccess: 'API key copied',
     apiKeyCreated: 'API key created',
     apiKeyRevoked: 'API key revoked',
@@ -360,7 +360,16 @@ const en = {
     apiKeyRevokedStatus: 'Revoked',
     apiKeyLimitDesc: 'Each user can have up to {count} active keys',
     noApiKeys: 'No API keys have been created',
-    apiDocs: 'API Documentation'
+    apiDocs: 'API Documentation',
+    apiKeyType: 'Key Type',
+    userApiKey: 'User Key',
+    adminApiKey: 'Administrator Key',
+    ipWhitelist: 'IP Allowlist',
+    validity: 'Validity',
+    lastUsedIp: 'Last Used IP',
+    lastRequest: 'Last Request',
+    userId: 'User ID',
+    globalApiSettings: 'Global API Settings'
 }
 
 export default en

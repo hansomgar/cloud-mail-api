@@ -6,7 +6,8 @@ const EXPECTED = Object.freeze({
 	databaseName: 'cloud-mail-api',
 	databaseId: 'a99b0859-0c89-49de-8af1-a19b45c94e2c',
 	kvNamespaceId: '2a56f3742be04a37a0fdf8e359023ca4',
-	domain: 'mail.airoute.kdns.fr'
+	domain: 'mail.airoute.kdns.fr',
+	mailDomains: ['mail.airoute.kdns.fr', 'airoute.kdns.fr']
 });
 
 const FORBIDDEN_PRODUCTION_IDS = Object.freeze([
@@ -80,10 +81,16 @@ for (const file of configs) {
 		relativeFile
 	);
 
-	const domainMatch = content.match(/^domain\s*=\s*\[\s*"([^"]+)"\s*]/m);
-	if (!domainMatch || domainMatch[1] !== EXPECTED.domain) {
+	const domainMatch = content.match(/^domain\s*=\s*\[([^\]]+)]/m);
+	const mailDomains = domainMatch
+		? [...domainMatch[1].matchAll(/"([^"]+)"/g)].map(match => match[1])
+		: [];
+	if (
+		mailDomains.length !== EXPECTED.mailDomains.length ||
+		mailDomains.some((domain, index) => domain !== EXPECTED.mailDomains[index])
+	) {
 		throw new Error(
-			`${relativeFile}: unsafe mail domain; expected "${EXPECTED.domain}"`
+			`${relativeFile}: unsafe mail domains; expected ${JSON.stringify(EXPECTED.mailDomains)}`
 		);
 	}
 }

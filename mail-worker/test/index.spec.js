@@ -13,28 +13,10 @@ const USER_TWO_PUBLIC_ID = '222222222222222222222222';
 const USER_ONE_KEY = `cma_${USER_ONE_PUBLIC_ID}_${'A'.repeat(43)}`;
 const USER_TWO_KEY = `cma_${USER_TWO_PUBLIC_ID}_${'B'.repeat(43)}`;
 
-function toBase64Url(bytes) {
-	let binary = '';
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-	return btoa(binary)
-		.replaceAll('+', '-')
-		.replaceAll('/', '_')
-		.replaceAll('=', '');
-}
-
-async function hashKey(value) {
-	const digest = await crypto.subtle.digest(
-		'SHA-256',
-		new TextEncoder().encode(value)
-	);
-	return toBase64Url(new Uint8Array(digest));
-}
-
 async function resetDatabase() {
 	await env.db.exec(`
 		DROP TABLE IF EXISTS api_key;
+		DROP TABLE IF EXISTS oauth;
 		DROP TABLE IF EXISTS attachments;
 		DROP TABLE IF EXISTS email;
 		DROP TABLE IF EXISTS account;
@@ -43,7 +25,9 @@ async function resetDatabase() {
 		DROP TABLE IF EXISTS user;
 
 		CREATE TABLE setting (
-			rest_api_enabled INTEGER NOT NULL DEFAULT 1
+			rest_api_enabled INTEGER NOT NULL DEFAULT 1,
+			many_email INTEGER NOT NULL DEFAULT 0,
+			add_email INTEGER NOT NULL DEFAULT 0
 		);
 
 		CREATE TABLE user (
@@ -63,6 +47,7 @@ async function resetDatabase() {
 			sort INTEGER DEFAULT 0,
 			send_count INTEGER DEFAULT 0,
 			reg_key_id INTEGER NOT NULL DEFAULT 0,
+			account_limit INTEGER NOT NULL DEFAULT -1,
 			is_del INTEGER NOT NULL DEFAULT 0
 		);
 
@@ -141,16 +126,26 @@ async function resetDatabase() {
 			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
+		CREATE TABLE oauth (
+			oauth_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL DEFAULT 0
+		);
+
 		CREATE TABLE api_key (
 			api_key_id INTEGER PRIMARY KEY AUTOINCREMENT,
 			public_id TEXT NOT NULL,
 			user_id INTEGER NOT NULL,
 			name TEXT NOT NULL,
-			key_hash TEXT NOT NULL,
 			key_prefix TEXT NOT NULL,
+			api_key TEXT NOT NULL DEFAULT '',
+			ip_whitelist TEXT NOT NULL DEFAULT '',
+			expire_time DATETIME,
+			is_admin INTEGER NOT NULL DEFAULT 0,
 			status INTEGER NOT NULL DEFAULT 0,
 			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			last_used_time DATETIME,
+			last_used_ip TEXT NOT NULL DEFAULT '',
+			last_request TEXT NOT NULL DEFAULT '',
 			revoke_time DATETIME
 		);
 	`);
@@ -250,7 +245,7 @@ async function resetDatabase() {
 		env.db
 			.prepare(
 				`INSERT INTO api_key
-				 (api_key_id, public_id, user_id, name, key_hash, key_prefix, status)
+				 (api_key_id, public_id, user_id, name, key_prefix, api_key, status)
 				 VALUES (?, ?, ?, ?, ?, ?, 0)`
 			)
 			.bind(
@@ -258,13 +253,13 @@ async function resetDatabase() {
 				USER_ONE_PUBLIC_ID,
 				1,
 				'User one test',
-				await hashKey(USER_ONE_KEY),
-				`cma_${USER_ONE_PUBLIC_ID}_AAAA…`
+				`cma_${USER_ONE_PUBLIC_ID}_AAAA…`,
+				USER_ONE_KEY
 			),
 		env.db
 			.prepare(
 				`INSERT INTO api_key
-				 (api_key_id, public_id, user_id, name, key_hash, key_prefix, status)
+				 (api_key_id, public_id, user_id, name, key_prefix, api_key, status)
 				 VALUES (?, ?, ?, ?, ?, ?, 0)`
 			)
 			.bind(
@@ -272,8 +267,8 @@ async function resetDatabase() {
 				USER_TWO_PUBLIC_ID,
 				2,
 				'User two test',
-				await hashKey(USER_TWO_KEY),
-				`cma_${USER_TWO_PUBLIC_ID}_BBBB…`
+				`cma_${USER_TWO_PUBLIC_ID}_BBBB…`,
+				USER_TWO_KEY
 			)
 	]);
 
@@ -361,7 +356,7 @@ function serviceContext() {
 }
 
 describe('Cloud Mail API key management', () => {
-	it('creates multiple named keys, stores only hashes, and revokes keys independently', async () => {
+	it('creates multiple named keys, stores plaintext, and revokes keys independently', async () => {
 		const context = serviceContext();
 		const first = await apiKeyService.create(context, 1, {
 			name: 'Home server'
@@ -370,12 +365,12 @@ describe('Cloud Mail API key management', () => {
 			name: 'Mobile automation'
 		});
 
-		expect(first.key).toMatch(/^cma_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$/);
-		expect(second.key).not.toBe(first.key);
+		expect(first.apiKey).toMatch(/^cma_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$/);
+		expect(second.apiKey).not.toBe(first.apiKey);
 
 		const stored = await env.db
 			.prepare(
-				`SELECT name, key_hash, key_prefix, status
+				`SELECT name, key_prefix, status
 				 FROM api_key
 				 WHERE user_id = 1 AND name IN (?, ?)
 				 ORDER BY api_key_id`
@@ -384,19 +379,217 @@ describe('Cloud Mail API key management', () => {
 			.all();
 
 		expect(stored.results).toHaveLength(2);
-		expect(stored.results[0].key_hash).not.toBe(first.key);
-		expect(stored.results[0].key_prefix).not.toBe(first.key);
+		const plaintext = await env.db.prepare(
+			`SELECT api_key FROM api_key WHERE api_key_id = ?`
+		).bind(first.apiKeyId).first();
+		expect(plaintext.api_key).toBe(first.apiKey);
 
 		const status = await apiKeyService.status(serviceContext(), 1);
 		const firstPublic = status.list.find(item => item.apiKeyId === first.apiKeyId);
-		expect(firstPublic.key).toBeUndefined();
+		expect(firstPublic.apiKey).toBe(first.apiKey);
 
 		await apiKeyService.revoke(serviceContext(), 1, first.apiKeyId);
 
-		const revokedResponse = await apiRequest('/accounts', first.key);
-		const activeResponse = await apiRequest('/accounts', second.key);
+		const revokedResponse = await apiRequest('/accounts', first.apiKey);
+		const activeResponse = await apiRequest('/accounts', second.apiKey);
 		expect(revokedResponse.status).toBe(401);
 		expect(activeResponse.status).toBe(200);
+	});
+
+	it('enforces IP whitelist and records the last request audit', async () => {
+		await env.db.prepare(
+			`UPDATE api_key SET ip_whitelist = '203.0.113.10' WHERE api_key_id = 1`
+		).run();
+
+		const denied = await apiRequest('/accounts');
+		expect(denied.status).toBe(403);
+
+		const allowed = await apiRequest('/accounts', USER_ONE_KEY, {
+			headers: {'CF-Connecting-IP': '203.0.113.10'}
+		});
+		expect(allowed.status).toBe(200);
+
+		const audit = await env.db.prepare(
+			`SELECT last_used_ip, last_used_time, last_request FROM api_key WHERE api_key_id = 1`
+		).first();
+		expect(audit.last_used_ip).toBe('203.0.113.10');
+		expect(audit.last_used_time).toBeTruthy();
+		expect(JSON.parse(audit.last_request).path).toBe('/v1/accounts');
+	});
+
+	it('rejects an expired key', async () => {
+		await env.db.prepare(
+			`UPDATE api_key SET expire_time = '2000-01-01 00:00:00' WHERE api_key_id = 1`
+		).run();
+		expect((await apiRequest('/accounts')).status).toBe(401);
+	});
+
+	it('allows an administrator key while user REST API is disabled', async () => {
+		env.admin = 'one@example.test';
+		await env.db.prepare(
+			`UPDATE api_key SET is_admin = 1 WHERE api_key_id = 1`
+		).run();
+		await setApiEnabled(false);
+
+		const response = await apiRequest('/admin/users');
+		expect(response.status).toBe(200);
+		expect((await response.json()).data.items).toHaveLength(2);
+	});
+
+	it('updates IP whitelist and expiration while keeping plaintext visible', async () => {
+		const updated = await apiKeyService.update(serviceContext(), 1, 1, {
+			name: 'Updated key',
+			ipWhitelist: ['203.0.113.8', '203.0.113.9'],
+			permanent: true
+		});
+		expect(updated.name).toBe('Updated key');
+		expect(updated.ipWhitelist).toEqual(['203.0.113.8', '203.0.113.9']);
+		expect(updated.apiKey).toBe(USER_ONE_KEY);
+		expect(updated.permanent).toBe(true);
+	});
+
+	it('validates whitelist addresses and requires a non-permanent expiration', async () => {
+		await expect(apiKeyService.create(serviceContext(), 1, {
+			name: 'Bad IP',
+			ipWhitelist: ['999.1.1.1']
+		})).rejects.toThrow('Invalid IP address');
+
+		await expect(apiKeyService.create(serviceContext(), 1, {
+			name: 'Missing expiration',
+			permanent: false
+		})).rejects.toThrow('expireTime is required');
+	});
+
+	it('lets the web administrator view all plaintext keys and create an admin key', async () => {
+		const context = serviceContext();
+		context.set('user', {userId: 1, email: 'one@example.test'});
+		env.admin = 'one@example.test';
+
+		const listed = await apiKeyService.adminList(context);
+		expect(listed.list.map(item => item.userEmail)).toEqual([
+			'two@example.test',
+			'one@example.test'
+		]);
+		expect(listed.list[0].apiKey).toBeTruthy();
+		expect(listed.settings).toMatchObject({
+			restApiEnabled: 0,
+			manyEmail: 0,
+			addEmail: 0
+		});
+
+		const created = await apiKeyService.create(
+			context,
+			1,
+			{name: 'Administrator automation', permanent: true},
+			{isAdmin: true}
+		);
+		expect(created.isAdmin).toBe(1);
+		expect(created.apiKey).toMatch(/^cma_/);
+	});
+
+	it('redacts secrets from the recorded request body', async () => {
+		await apiRequest('/accounts', USER_ONE_KEY, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'CF-Connecting-IP': '203.0.113.20'
+			},
+			body: JSON.stringify({
+				email: 'audit@example.test',
+				password: 'must-not-be-recorded',
+				apiKey: 'must-not-be-recorded'
+			})
+		});
+		const row = await env.db.prepare(
+			`SELECT last_request FROM api_key WHERE api_key_id = 1`
+		).first();
+		const request = JSON.parse(row.last_request);
+		const body = JSON.parse(request.body);
+		expect(body.password).toBe('[REDACTED]');
+		expect(body.apiKey).toBe('[REDACTED]');
+	});
+});
+
+describe('Cloud Mail administrator REST API', () => {
+	beforeEach(async () => {
+		env.admin = 'one@example.test';
+		await env.db.prepare(
+			`UPDATE api_key SET is_admin = 1 WHERE api_key_id = 1`
+		).run();
+	});
+
+	it('changes global API and multi-account settings while user API is disabled', async () => {
+		await setApiEnabled(false);
+		const response = await apiRequest('/admin/settings', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				restApiEnabled: 0,
+				manyEmail: 1,
+				addEmail: 1
+			})
+		});
+		expect(response.status).toBe(200);
+		const row = await env.db.prepare(
+			`SELECT rest_api_enabled, many_email, add_email FROM setting`
+		).first();
+		expect(row).toMatchObject({
+			rest_api_enabled: 0,
+			many_email: 1,
+			add_email: 1
+		});
+	});
+
+	it('sets a per-user account limit and filters all-site email', async () => {
+		const limitResponse = await apiRequest(
+			'/admin/users/2/account-limit',
+			USER_ONE_KEY,
+			{
+				method: 'PATCH',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({accountLimit: 25})
+			}
+		);
+		expect(limitResponse.status).toBe(200);
+		expect((await env.db.prepare(
+			`SELECT account_limit FROM user WHERE user_id = 2`
+		).first()).account_limit).toBe(25);
+
+		const emails = await apiRequest('/admin/emails?userId=2');
+		const emailBody = await emails.json();
+		expect(emails.status).toBe(200);
+		expect(emailBody.data.items.map(item => item.emailId)).toEqual([2]);
+	});
+
+	it('creates and physically deletes a user with related data', async () => {
+		const create = await apiRequest('/admin/users', USER_ONE_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				email: 'managed@example.test',
+				type: 1,
+				password: 'ChangeMe123!'
+			})
+		});
+		const created = await create.json();
+		expect(create.status).toBe(201);
+		expect(created.data.email).toBe('managed@example.test');
+
+		const remove = await apiRequest(
+			`/admin/users/${created.data.userId}`,
+			USER_ONE_KEY,
+			{method: 'DELETE'}
+		);
+		expect(remove.status).toBe(200);
+		expect(await env.db.prepare(
+			`SELECT COUNT(*) AS total FROM user WHERE user_id = ?`
+		).bind(created.data.userId).first()).toMatchObject({total: 0});
+	});
+
+	it('does not allow deleting the configured administrator', async () => {
+		expect((await apiRequest('/admin/users/1', USER_ONE_KEY, {
+			method: 'DELETE'
+		})).status).toBe(403);
 	});
 });
 
@@ -529,17 +722,17 @@ describe('Cloud Mail REST API ownership isolation', () => {
 		const createBody = await createResponse.json();
 
 		expect(createResponse.status).toBe(201);
-		expect(createBody.data.email).toBe('automation@example.test');
+		expect(createBody.data.items[0].email).toBe('automation@example.test');
 
 		const stored = await env.db
 			.prepare(`SELECT user_id, is_del FROM account WHERE account_id = ?`)
-			.bind(createBody.data.accountId)
+			.bind(createBody.data.items[0].accountId)
 			.first();
 		expect(stored.user_id).toBe(1);
 		expect(stored.is_del).toBe(0);
 
 		const deleteResponse = await apiRequest(
-			`/accounts/${createBody.data.accountId}`,
+			`/accounts/${createBody.data.items[0].accountId}`,
 			USER_ONE_KEY,
 			{ method: 'DELETE' }
 		);
@@ -547,9 +740,63 @@ describe('Cloud Mail REST API ownership isolation', () => {
 
 		const deleted = await env.db
 			.prepare(`SELECT is_del FROM account WHERE account_id = ?`)
-			.bind(createBody.data.accountId)
+			.bind(createBody.data.items[0].accountId)
 			.first();
 		expect(deleted.is_del).toBe(1);
+	});
+
+	it('creates multiple child accounts from an array', async () => {
+		const response = await apiRequest('/accounts', USER_ONE_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify([
+				'batch-one@example.test',
+				{email: 'batch-two@example.test'}
+			])
+		});
+		const body = await response.json();
+		expect(response.status).toBe(201);
+		expect(body.data.items.map(item => item.email)).toEqual([
+			'batch-one@example.test',
+			'batch-two@example.test'
+		]);
+	});
+
+	it('filters email by account name and time', async () => {
+		const owned = await apiRequest(
+			'/emails?accountName=One&startTime=2000-01-01%2000:00:00'
+		);
+		expect((await owned.json()).data.items.map(item => item.emailId)).toEqual([1]);
+
+		const child = await apiRequest('/emails?accountName=Child');
+		expect((await child.json()).data.items).toEqual([]);
+
+		const future = await apiRequest('/emails?startTime=2999-01-01%2000:00:00');
+		expect((await future.json()).data.items).toEqual([]);
+	});
+
+	it('batch-deletes only owned emails', async () => {
+		const response = await apiRequest('/emails', USER_ONE_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({emailIds: [1, 2]})
+		});
+		const body = await response.json();
+		expect(response.status).toBe(200);
+		expect(body.data.deleted).toBe(1);
+
+		const own = await env.db.prepare(
+			`SELECT is_del FROM email WHERE email_id = 1`
+		).first();
+		const other = await env.db.prepare(
+			`SELECT is_del FROM email WHERE email_id = 2`
+		).first();
+		expect(own.is_del).toBe(1);
+		expect(other.is_del).toBe(0);
+	});
+
+	it('protects administrator endpoints from user keys', async () => {
+		expect((await apiRequest('/admin/users')).status).toBe(403);
 	});
 
 	it('protects the primary account and hides another user account', async () => {

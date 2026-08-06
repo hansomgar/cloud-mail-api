@@ -1,12 +1,15 @@
-import { and, asc, count, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, lte, sql } from 'drizzle-orm';
+import dayjs from 'dayjs';
 import account from '../entity/account';
 import { att } from '../entity/att';
 import email from '../entity/email';
+import user from '../entity/user';
 import orm from '../entity/orm';
 import BizError from '../error/biz-error';
 import { accountConst, emailConst, isDel } from '../const/entity-const';
 import accountService from './account-service';
 import r2Service from './r2-service';
+import KvConst from '../const/kv-const';
 import userService from './user-service';
 
 function positiveInteger(value, fieldName, options = {}) {
@@ -29,6 +32,15 @@ function limitValue(value, maximum) {
 		throw new BizError(`limit must be an integer between 1 and ${maximum}`, 400);
 	}
 	return limit;
+}
+
+function dateTimeValue(value, fieldName) {
+	if (value === undefined || value === null || value === '') return null;
+	const text = String(value);
+	if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) || !dayjs(text).isValid()) {
+		throw new BizError(`${fieldName} must use YYYY-MM-DD HH:mm:ss`, 400);
+	}
+	return text;
 }
 
 function enumInteger(value, fieldName, allowed, optional = true) {
@@ -196,10 +208,27 @@ const restApiService = {
 	},
 
 	async accountCreate(c, userId, body) {
-		const row = await accountService.add(c, body, userId, {
-			skipHumanVerification: true
-		});
-		return publicAccount(row);
+		let entries;
+		if (Array.isArray(body)) entries = body;
+		else if (Array.isArray(body?.emails)) entries = body.emails;
+		else entries = [body];
+
+		if (!entries.length || entries.length > 50) {
+			throw new BizError('Provide between 1 and 50 email accounts', 400);
+		}
+
+		const items = [];
+		for (const entry of entries) {
+			const params = typeof entry === 'string' ? { email: entry } : entry;
+			if (!params || typeof params.email !== 'string') {
+				throw new BizError('Each account must be an email string or an object containing email', 400);
+			}
+			const row = await accountService.add(c, params, userId, {
+				skipHumanVerification: true
+			});
+			items.push(publicAccount(row));
+		}
+		return { items };
 	},
 
 	async accountUpdate(c, userId, accountId, body) {
@@ -289,9 +318,29 @@ const restApiService = {
 			[emailConst.type.RECEIVE, emailConst.type.SEND]
 		);
 		const unread = enumInteger(query.unread, 'unread', [0, 1]);
+		const startTime = dateTimeValue(query.startTime, 'startTime');
+		const endTime = dateTimeValue(query.endTime, 'endTime');
+		if (startTime && endTime && startTime > endTime) {
+			throw new BizError('startTime must not be after endTime', 400);
+		}
+		if (accountId && query.accountName) {
+			throw new BizError('Use either accountId or accountName, not both', 400);
+		}
+		let selectedAccountIds = accountId ? [accountId] : [];
 
 		if (accountId) {
 			await ownedAccount(c, userId, accountId);
+		} else if (query.accountName) {
+			const accountRows = await orm(c).select({ accountId: account.accountId })
+				.from(account).where(
+					and(
+						eq(account.userId, userId),
+						eq(account.isDel, isDel.NORMAL),
+						sql`(${account.name} COLLATE NOCASE = ${query.accountName} OR ${account.email} COLLATE NOCASE = ${query.accountName})`
+					)
+				).all();
+			if (!accountRows.length) throw new BizError('Account not found', 404);
+			selectedAccountIds = accountRows.map(row => row.accountId);
 		}
 
 		const conditions = [
@@ -299,8 +348,8 @@ const restApiService = {
 			eq(email.isDel, isDel.NORMAL),
 			lt(email.emailId, cursor)
 		];
-		if (accountId) {
-			conditions.push(eq(email.accountId, accountId));
+		if (selectedAccountIds.length) {
+			conditions.push(inArray(email.accountId, selectedAccountIds));
 		}
 		if (type !== null) {
 			conditions.push(eq(email.type, type));
@@ -308,6 +357,8 @@ const restApiService = {
 		if (unread !== null) {
 			conditions.push(eq(email.unread, unread));
 		}
+		if (startTime) conditions.push(gte(email.createTime, startTime));
+		if (endTime) conditions.push(lte(email.createTime, endTime));
 
 		const rows = await orm(c)
 			.select({
@@ -391,6 +442,28 @@ const restApiService = {
 			.run();
 	},
 
+	async emailBatchDelete(c, userId, body) {
+		const source = Array.isArray(body) ? body : body?.emailIds;
+		const ids = [...new Set((source || []).map(Number))]
+			.filter(id => Number.isInteger(id) && id > 0);
+		if (!ids.length || ids.length > 100) {
+			throw new BizError('emailIds must contain between 1 and 100 IDs', 400);
+		}
+		const ownedRows = await orm(c).select({ emailId: email.emailId }).from(email)
+			.where(and(
+				eq(email.userId, userId),
+				eq(email.isDel, isDel.NORMAL),
+				inArray(email.emailId, ids)
+			)).all();
+		const ownedIds = ownedRows.map(row => row.emailId);
+		if (ownedIds.length) {
+			await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
+				and(eq(email.userId, userId), inArray(email.emailId, ownedIds))
+			).run();
+		}
+		return { deleted: ownedIds.length };
+	},
+
 	async attachmentList(c, userId, emailId) {
 		const row = await ownedEmail(c, userId, emailId);
 		const rows = await orm(c)
@@ -400,6 +473,131 @@ const restApiService = {
 			.orderBy(asc(att.attId))
 			.all();
 		return rows.map(attachmentMetadata);
+	},
+
+	async adminUserList(c, query) {
+		const limit = limitValue(query.limit, 100);
+		const conditions = [];
+		if (query.email) conditions.push(like(user.email, `%${query.email}%`));
+		if (query.userId) {
+			conditions.push(eq(user.userId, positiveInteger(query.userId, 'userId')));
+		}
+		const rows = await orm(c).select({
+			userId: user.userId,
+			email: user.email,
+			type: user.type,
+			status: user.status,
+			accountLimit: user.accountLimit,
+			createTime: user.createTime,
+			isDel: user.isDel
+		}).from(user).where(conditions.length ? and(...conditions) : undefined)
+			.orderBy(desc(user.userId)).limit(limit).all();
+		return { items: rows };
+	},
+
+	async adminUserCreate(c, body) {
+		if (
+			typeof body?.email !== 'string' ||
+			typeof body?.password !== 'string' ||
+			!Number.isInteger(Number(body?.type)) ||
+			Number(body.type) <= 0
+		) {
+			throw new BizError('email, password, and a positive role type are required', 400);
+		}
+		await userService.add(c, {
+			email: body.email,
+			password: body.password,
+			type: Number(body.type)
+		});
+		const row = await userService.selectByEmail(c, body.email);
+		return { userId: row.userId, email: row.email };
+	},
+
+	async adminUserDelete(c, userId) {
+		userId = positiveInteger(userId, 'userId');
+		await userService.physicsDelete(c, { userIds: String(userId) });
+	},
+
+	async adminUserAccountLimit(c, userId, body) {
+		userId = positiveInteger(userId, 'userId');
+		const limit = Number(body.accountLimit);
+		if (!Number.isInteger(limit) || limit < -1) {
+			throw new BizError('accountLimit must be -1, 0, or a positive integer', 400);
+		}
+		if (!await userService.selectByIdIncludeDel(c, userId)) {
+			throw new BizError('User not found', 404);
+		}
+		await orm(c).update(user).set({ accountLimit: limit })
+			.where(eq(user.userId, userId)).run();
+		return { userId, accountLimit: limit };
+	},
+
+	async adminEmailList(c, query) {
+		const limit = limitValue(query.limit, 100);
+		const conditions = [eq(email.isDel, isDel.NORMAL)];
+		let selectedUserId = query.userId
+			? positiveInteger(query.userId, 'userId')
+			: null;
+		if (query.userEmail) {
+			const row = await userService.selectByEmailIncludeDel(c, query.userEmail);
+			if (!row) throw new BizError('User not found', 404);
+			if (selectedUserId && selectedUserId !== row.userId) {
+				throw new BizError('userId and userEmail identify different users', 400);
+			}
+			selectedUserId = row.userId;
+		}
+		if (selectedUserId) conditions.push(eq(email.userId, selectedUserId));
+		if (query.accountId) {
+			conditions.push(eq(email.accountId, positiveInteger(query.accountId, 'accountId')));
+		}
+		const startTime = dateTimeValue(query.startTime, 'startTime');
+		const endTime = dateTimeValue(query.endTime, 'endTime');
+		if (startTime && endTime && startTime > endTime) {
+			throw new BizError('startTime must not be after endTime', 400);
+		}
+		if (startTime) conditions.push(gte(email.createTime, startTime));
+		if (endTime) conditions.push(lte(email.createTime, endTime));
+		if (query.accountName) {
+			const accountConditions = [
+				eq(account.isDel, isDel.NORMAL),
+				sql`(${account.name} COLLATE NOCASE = ${query.accountName} OR ${account.email} COLLATE NOCASE = ${query.accountName})`
+			];
+			if (selectedUserId) accountConditions.push(eq(account.userId, selectedUserId));
+			const row = await orm(c).select().from(account)
+				.where(and(...accountConditions)).get();
+			if (!row) throw new BizError('Account not found', 404);
+			conditions.push(eq(email.accountId, row.accountId));
+		}
+		const rows = await orm(c).select().from(email).where(and(...conditions))
+			.orderBy(desc(email.emailId)).limit(limit).all();
+		return { items: rows };
+	},
+
+	async adminSettings(c, body) {
+		const fields = {
+			restApiEnabled: 'rest_api_enabled',
+			manyEmail: 'many_email',
+			addEmail: 'add_email'
+		};
+		const allowed = {};
+		for (const [key, column] of Object.entries(fields)) {
+			if (body[key] === undefined) continue;
+			const value = Number(body[key]);
+			if (![0, 1].includes(value)) {
+				throw new BizError(`${key} must be 0 or 1`, 400);
+			}
+			allowed[key] = value;
+			await c.env.db.prepare(`UPDATE setting SET ${column} = ?`).bind(value).run();
+		}
+		if (!Object.keys(allowed).length) {
+			throw new BizError('No supported settings supplied', 400);
+		}
+
+		const cached = await c.env.kv.get(KvConst.SETTING, { type: 'json' }) || {};
+		Object.assign(cached, allowed);
+		await c.env.kv.put(KvConst.SETTING, JSON.stringify(cached));
+		c.set('setting', cached);
+		return allowed;
 	},
 
 	async attachmentDownload(c, userId, emailId, attachmentId) {

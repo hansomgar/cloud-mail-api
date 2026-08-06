@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Cloud Mail API",
-    "version": "1.0.0",
-    "description": "REST API for a user to manage only their own mail accounts, messages, and attachments. API access must be enabled by the administrator. Create and revoke named API keys from the authenticated web settings page."
+    "title": "Cloud Mail REST API",
+    "version": "2.0.0",
+    "description": "用户 Key 只能访问本人资源，受管理员总开关控制。管理员 Key 只能由超级管理员创建，可访问 /admin/*，不受用户 API 总开关影响。Key 可配置精确 IP 白名单和永久/到期时间；系统记录最后成功请求 IP、时间和脱敏请求内容。"
   },
   "servers": [
     {
@@ -16,70 +16,25 @@
       "apiKey": []
     }
   ],
-  "tags": [
-    {
-      "name": "Current user"
-    },
-    {
-      "name": "Accounts"
-    },
-    {
-      "name": "Emails"
-    },
-    {
-      "name": "Attachments"
-    }
-  ],
   "paths": {
     "/me": {
       "get": {
-        "tags": [
-          "Current user"
-        ],
-        "summary": "Get the API key owner",
-        "operationId": "getCurrentUser",
-        "responses": {
-          "200": {
-            "description": "Current user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CurrentUserResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          }
-        }
-      }
-    },
-    "/accounts": {
-      "get": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "List the current user's mail accounts",
-        "operationId": "listAccounts",
-        "parameters": [
+        "summary": "获取当前用户",
+        "description": "返回 API Key 所属用户的基本信息。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_me",
+        "parameters": [],
+        "security": [
           {
-            "$ref": "#/components/parameters/ForwardCursor"
-          },
-          {
-            "$ref": "#/components/parameters/Limit"
+            "apiKey": []
           }
         ],
         "responses": {
           "200": {
-            "description": "Account page",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountPageResponse"
+                  "type": "object"
                 }
               }
             }
@@ -92,81 +47,247 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/me\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/accounts": {
+      "get": {
+        "summary": "查询邮箱账号",
+        "description": "查询主账号和子账号。使用游标分页。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_accounts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "上一页返回的 nextCursor；第一页省略。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 123
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页数量，1-50，默认 20。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts?limit=20\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
       },
       "post": {
-        "tags": [
-          "Accounts"
+        "summary": "批量创建子邮箱",
+        "description": "请求体可直接传数组，也可传 {emails:[...]}；每次 1-50 个。响应统一返回 items 数组。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "post_accounts",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
         ],
-        "summary": "Create a child mail account",
-        "description": "The account is always owned by the API key owner. Domain, prefix, uniqueness, role domain, and account-count restrictions still apply. Interactive Turnstile verification is not required after API key authentication.",
-        "operationId": "createAccount",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request POST \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '[\"batch-one@mail.airoute.kdns.fr\",{\"email\":\"batch-two@mail.airoute.kdns.fr\"}]'"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateAccountRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Account created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": [
+                "batch-one@mail.airoute.kdns.fr",
+                {
+                  "email": "batch-two@mail.airoute.kdns.fr"
                 }
-              }
+              ]
             }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
           }
         }
       }
     },
     "/accounts/{accountId}": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/AccountId"
-        }
-      ],
       "patch": {
-        "tags": [
-          "Accounts"
+        "summary": "修改邮箱账号",
+        "description": "name 修改显示名称；allReceive 为 0/1，设置聚合收件账号。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "patch_accounts_accountId",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮箱账号 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          }
         ],
-        "summary": "Update an owned mail account",
-        "operationId": "updateAccount",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"name\":\"Automation\",\"allReceive\":0}'"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateAccountRequest"
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": {
+                "name": "Automation",
+                "allReceive": 0
               }
             }
           }
-        },
+        }
+      },
+      "delete": {
+        "summary": "删除子邮箱账号",
+        "description": "软删除本人子账号；主账号不能删除。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "delete_accounts_accountId",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "description": "本人子邮箱账号 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Account updated",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
+                  "type": "object"
                 }
               }
             }
@@ -183,96 +304,115 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "Delete an owned child mail account",
-        "description": "The user's primary account cannot be deleted.",
-        "operationId": "deleteAccount",
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/EmptySuccess"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
           }
-        }
+        ]
       }
     },
     "/emails": {
       "get": {
-        "tags": [
-          "Emails"
-        ],
-        "summary": "List the current user's email summaries",
-        "description": "Uses a descending email ID cursor. The response deliberately excludes full HTML and text bodies.",
-        "operationId": "listEmails",
+        "summary": "筛选邮件",
+        "description": "支持按时间、主/子账号 ID、账号名称或完整邮箱筛选。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_emails",
         "parameters": [
           {
-            "$ref": "#/components/parameters/BackwardCursor"
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "上一页返回的 nextCursor（emailId）。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 999999
           },
           {
-            "$ref": "#/components/parameters/Limit"
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页数量，1-50，默认 20。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
           },
           {
             "name": "accountId",
             "in": "query",
             "required": false,
-            "description": "Filter by an account owned by the current user.",
+            "description": "主账号或子账号 ID。",
             "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
+              "type": "integer"
+            },
+            "example": 1
+          },
+          {
+            "name": "accountName",
+            "in": "query",
+            "required": false,
+            "description": "账号显示名或完整邮箱；与 accountId 二选一。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "admin"
           },
           {
             "name": "type",
             "in": "query",
             "required": false,
-            "description": "0 = received, 1 = sent.",
+            "description": "0=收件，1=发件。",
             "schema": {
-              "type": "integer",
-              "enum": [
-                0,
-                1
-              ]
-            }
+              "type": "integer"
+            },
+            "example": 0
           },
           {
             "name": "unread",
             "in": "query",
             "required": false,
-            "description": "0 = unread, 1 = read.",
+            "description": "0=未读，1=已读。",
             "schema": {
-              "type": "integer",
-              "enum": [
-                0,
-                1
-              ]
-            }
+              "type": "integer"
+            },
+            "example": 0
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": false,
+            "description": "起始时间（含），格式 YYYY-MM-DD HH:mm:ss。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-08-01 00:00:00"
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": false,
+            "description": "结束时间（含），格式 YYYY-MM-DD HH:mm:ss。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-08-31 23:59:59"
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
           }
         ],
         "responses": {
           "200": {
-            "description": "Email page",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmailPageResponse"
+                  "type": "object"
                 }
               }
             }
@@ -288,29 +428,109 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails?cursor=999999&limit=20&accountName=admin&type=0&unread=0&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      },
+      "delete": {
+        "summary": "批量删除邮件",
+        "description": "一次软删除 1-100 封本人邮件；不属于当前用户的 ID 会被忽略。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "delete_emails",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"emailIds\":[123,124,125]}'"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": {
+                "emailIds": [
+                  123,
+                  124,
+                  125
+                ]
+              }
+            }
           }
         }
       }
     },
     "/emails/{emailId}": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/EmailId"
-        }
-      ],
       "get": {
-        "tags": [
-          "Emails"
+        "summary": "读取邮件详情",
+        "description": "返回邮件正文、收件人、抄送、密送和附件数量。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_emails_emailId",
+        "parameters": [
+          {
+            "name": "emailId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 123
+          }
         ],
-        "summary": "Get one owned email including its body",
-        "operationId": "getEmail",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Email details",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmailDetailResponse"
+                  "type": "object"
                 }
               }
             }
@@ -327,17 +547,47 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
       },
       "delete": {
-        "tags": [
-          "Emails"
+        "summary": "删除单封邮件",
+        "description": "软删除本人单封邮件。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "delete_emails_emailId",
+        "parameters": [
+          {
+            "name": "emailId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 123
+          }
         ],
-        "summary": "Soft-delete one owned email",
-        "operationId": "deleteEmail",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/EmptySuccess"
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -351,59 +601,46 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
       }
     },
     "/emails/{emailId}/read": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/EmailId"
-        }
-      ],
       "patch": {
-        "tags": [
-          "Emails"
-        ],
-        "summary": "Mark one owned email as read",
-        "operationId": "markEmailRead",
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/EmptySuccess"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
+        "summary": "标记已读",
+        "description": "把本人邮件标记为已读。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "patch_emails_emailId_read",
+        "parameters": [
+          {
+            "name": "emailId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 123
           }
-        }
-      }
-    },
-    "/emails/{emailId}/attachments": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/EmailId"
-        }
-      ],
-      "get": {
-        "tags": [
-          "Attachments"
         ],
-        "summary": "List metadata for attachments on an owned email",
-        "operationId": "listAttachments",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Attachment metadata",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AttachmentListResponse"
+                  "type": "object"
                 }
               }
             }
@@ -420,39 +657,46 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/read\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
       }
     },
-    "/emails/{emailId}/attachments/{attachmentId}": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/EmailId"
-        },
-        {
-          "$ref": "#/components/parameters/AttachmentId"
-        }
-      ],
+    "/emails/{emailId}/attachments": {
       "get": {
-        "tags": [
-          "Attachments"
+        "summary": "查询附件",
+        "description": "返回本人邮件的附件元数据，不返回文件内容。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_emails_emailId_attachments",
+        "parameters": [
+          {
+            "name": "emailId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 123
+          }
         ],
-        "summary": "Download one attachment after ownership verification",
-        "operationId": "downloadAttachment",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Attachment bytes",
-            "headers": {
-              "Content-Disposition": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
+            "description": "成功",
             "content": {
-              "application/octet-stream": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "contentEncoding": "binary"
+                  "type": "object"
                 }
               }
             }
@@ -468,6 +712,520 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/attachments\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/emails/{emailId}/attachments/{attachmentId}": {
+      "get": {
+        "summary": "下载附件",
+        "description": "所有权验证后下载附件，响应使用 private,no-store。 只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_emails_emailId_attachments_attachmentId",
+        "parameters": [
+          {
+            "name": "emailId",
+            "in": "path",
+            "required": true,
+            "description": "本人邮件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 123
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "该邮件中的附件 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 9
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/emails/123/attachments/9\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "summary": "管理员查询用户",
+        "description": "查询全部或指定用户。 必须使用管理员专用 API Key。",
+        "operationId": "get_admin_users",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "返回数量，1-100。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 50
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "精确用户 ID。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 2
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "邮箱模糊搜索。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@"
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users?limit=50&email=user%40\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      },
+      "post": {
+        "summary": "管理员新增用户",
+        "description": "创建用户及其主邮箱账号。type 为角色 ID，password 至少 6 位。 必须使用管理员专用 API Key。",
+        "operationId": "post_admin_users",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request POST \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"email\":\"new@mail.airoute.kdns.fr\",\"type\":1,\"password\":\"ChangeMe123!\"}'"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": {
+                "email": "new@mail.airoute.kdns.fr",
+                "type": 1,
+                "password": "ChangeMe123!"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users/{userId}": {
+      "delete": {
+        "summary": "管理员删除用户",
+        "description": "物理删除指定用户、账号、邮件、附件元数据、会话和 Key；超级管理员不能删除。 必须使用管理员专用 API Key。",
+        "operationId": "delete_admin_users_userId",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "待删除用户 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/admin/users/{userId}/account-limit": {
+      "patch": {
+        "summary": "设置用户账号数量",
+        "description": "accountLimit=-1 沿用角色默认，0 不限，正整数为该用户最大邮箱账号数。 必须使用管理员专用 API Key。",
+        "operationId": "patch_admin_users_userId_account_limit",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "用户 ID。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/users/2/account-limit\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"accountLimit\":20}'"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": {
+                "accountLimit": 20
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/emails": {
+      "get": {
+        "summary": "管理员查询全站邮件",
+        "description": "可查看全部邮件或按用户、账号和时间筛选。 必须使用管理员专用 API Key。",
+        "operationId": "get_admin_emails",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "返回数量，1-100。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 50
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "用户 ID。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 2
+          },
+          {
+            "name": "userEmail",
+            "in": "query",
+            "required": false,
+            "description": "用户登录邮箱。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@mail.airoute.kdns.fr"
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "邮箱账号 ID。",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 3
+          },
+          {
+            "name": "accountName",
+            "in": "query",
+            "required": false,
+            "description": "账号名称或完整邮箱。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@mail.airoute.kdns.fr"
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": false,
+            "description": "起始时间（含）。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-08-01 00:00:00"
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": false,
+            "description": "结束时间（含）。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-08-31 23:59:59"
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/emails?limit=50&userEmail=user%40mail.airoute.kdns.fr&accountName=user%40mail.airoute.kdns.fr&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/admin/settings": {
+      "patch": {
+        "summary": "管理员修改 API/多号设置",
+        "description": "只接受 0/1。restApiEnabled:0 开启用户 API；manyEmail:0 开启多号模式；addEmail:0 允许添加邮箱。 必须使用管理员专用 API Key。",
+        "operationId": "patch_admin_settings",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/settings\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"restApiEnabled\":0,\"manyEmail\":0,\"addEmail\":0}'"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": [
+                  "object",
+                  "array"
+                ]
+              },
+              "example": {
+                "restApiEnabled": 0,
+                "manyEmail": 0,
+                "addEmail": 0
+              }
+            }
           }
         }
       }
@@ -478,550 +1236,109 @@
       "apiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "cma_publicId_secret",
-        "description": "Create a named key in the authenticated user settings page. Send it as `Authorization: Bearer cma_...`."
-      }
-    },
-    "parameters": {
-      "AccountId": {
-        "name": "accountId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "EmailId": {
-        "name": "emailId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "AttachmentId": {
-        "name": "attachmentId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "ForwardCursor": {
-        "name": "cursor",
-        "in": "query",
-        "required": false,
-        "description": "Return resources with an ID greater than this cursor.",
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "BackwardCursor": {
-        "name": "cursor",
-        "in": "query",
-        "required": false,
-        "description": "Return email IDs lower than this cursor.",
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "Limit": {
-        "name": "limit",
-        "in": "query",
-        "required": false,
-        "schema": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 50,
-          "default": 20
-        }
+        "bearerFormat": "cma_PUBLIC_ID_SECRET"
       }
     },
     "responses": {
-      "EmptySuccess": {
-        "description": "Operation completed",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/EmptySuccessResponse"
-            }
-          }
-        }
-      },
       "BadRequest": {
-        "description": "Invalid request",
+        "description": "错误响应",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         }
       },
       "Unauthorized": {
-        "description": "Missing, malformed, unknown, or revoked API key",
+        "description": "错误响应",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         }
       },
       "Forbidden": {
-        "description": "REST API disabled, API key owner disabled, or operation forbidden",
+        "description": "错误响应",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         }
       },
       "NotFound": {
-        "description": "Owned resource not found. Cross-user IDs are also reported as not found.",
+        "description": "错误响应",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
-            }
-          }
-        }
-      },
-      "Conflict": {
-        "description": "Resource conflict or protected primary account",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
-            }
-          }
-        }
-      }
-    },
-    "schemas": {
-      "CurrentUser": {
-        "type": "object",
-        "required": [
-          "userId",
-          "email",
-          "name",
-          "type"
-        ],
-        "properties": {
-          "userId": {
-            "type": "integer"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "integer"
-          },
-          "role": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "Account": {
-        "type": "object",
-        "required": [
-          "accountId",
-          "email",
-          "name",
-          "status",
-          "allReceive",
-          "sort"
-        ],
-        "properties": {
-          "accountId": {
-            "type": "integer"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "name": {
-            "type": "string"
-          },
-          "status": {
-            "type": "integer"
-          },
-          "latestEmailTime": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "createTime": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "allReceive": {
-            "type": "integer",
-            "enum": [
-              0,
-              1
-            ]
-          },
-          "sort": {
-            "type": "integer"
-          }
-        }
-      },
-      "CreateAccountRequest": {
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email"
-          }
-        }
-      },
-      "UpdateAccountRequest": {
-        "type": "object",
-        "minProperties": 1,
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 30
-          },
-          "allReceive": {
-            "type": "integer",
-            "enum": [
-              0,
-              1
-            ]
-          }
-        }
-      },
-      "EmailSummary": {
-        "type": "object",
-        "properties": {
-          "emailId": {
-            "type": "integer"
-          },
-          "accountId": {
-            "type": "integer"
-          },
-          "sendEmail": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sendName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "subject": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "toEmail": {
-            "type": "string"
-          },
-          "toName": {
-            "type": "string"
-          },
-          "type": {
-            "type": "integer",
-            "enum": [
-              0,
-              1
-            ]
-          },
-          "status": {
-            "type": "integer"
-          },
-          "unread": {
-            "type": "integer",
-            "enum": [
-              0,
-              1
-            ]
-          },
-          "code": {
-            "type": "string"
-          },
-          "textPreview": {
-            "type": "string"
-          },
-          "createTime": {
-            "type": "string"
-          }
-        }
-      },
-      "EmailDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/EmailSummary"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "text": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "content": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "recipient": {
-                "type": "array",
-                "items": {
-                  "type": "object"
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
                 }
-              },
-              "cc": {
-                "type": "array",
-                "items": {
-                  "type": "object"
-                }
-              },
-              "bcc": {
-                "type": "array",
-                "items": {
-                  "type": "object"
-                }
-              },
-              "messageId": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "inReplyTo": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "attachmentCount": {
-                "type": "integer",
-                "minimum": 0
-              }
-            }
-          }
-        ]
-      },
-      "Attachment": {
-        "type": "object",
-        "properties": {
-          "attachmentId": {
-            "type": "integer"
-          },
-          "emailId": {
-            "type": "integer"
-          },
-          "accountId": {
-            "type": "integer"
-          },
-          "filename": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "mimeType": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "size": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "disposition": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "contentId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "type": {
-            "type": "integer"
-          },
-          "createTime": {
-            "type": "string"
-          }
-        }
-      },
-      "CurrentUserResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/CurrentUser"
-          }
-        }
-      },
-      "AccountResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Account"
-          }
-        }
-      },
-      "AccountPageResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "items",
-              "nextCursor"
-            ],
-            "properties": {
-              "items": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Account"
-                }
-              },
-              "nextCursor": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              }
-            }
-          }
-        }
-      },
-      "EmailPageResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "items",
-              "nextCursor"
-            ],
-            "properties": {
-              "items": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EmailSummary"
-                }
-              },
-              "nextCursor": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              }
-            }
-          }
-        }
-      },
-      "EmailDetailResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/EmailDetail"
-          }
-        }
-      },
-      "AttachmentListResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Attachment"
-            }
-          }
-        }
-      },
-      "EmptySuccessResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "null"
-          }
-        }
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "required": [
-          "error"
-        ],
-        "properties": {
-          "error": {
-            "type": "object",
-            "required": [
-              "status",
-              "code",
-              "message"
-            ],
-            "properties": {
-              "status": {
-                "type": "integer"
-              },
-              "code": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
               }
             }
           }

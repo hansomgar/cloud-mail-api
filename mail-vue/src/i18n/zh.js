@@ -345,8 +345,8 @@ const zh = {
     apiKeyName: 'Key 名称',
     apiKeyNamePlaceholder: '例如：家中服务器',
     createApiKey: '创建 API Key',
-    apiKeyOneTimeTitle: '请立即保存 API Key',
-    apiKeyOneTimeDesc: '完整 Key 只显示这一次。关闭后无法再次查看，只能创建新 Key。',
+    apiKeyOneTimeTitle: 'API Key',
+    apiKeyOneTimeDesc: '完整 Key 会保存在服务端，可在 API Key 菜单中再次查看。',
     apiKeyCopySuccess: 'API Key 已复制',
     apiKeyCreated: 'API Key 创建成功',
     apiKeyRevoked: 'API Key 已吊销',
@@ -360,6 +360,15 @@ const zh = {
     apiKeyRevokedStatus: '已吊销',
     apiKeyLimitDesc: '每个用户最多可有 {count} 个有效 Key',
     noApiKeys: '尚未创建 API Key',
-    apiDocs: 'API 文档'
+    apiDocs: 'API 文档',
+    apiKeyType: 'Key 类型',
+    userApiKey: '用户 Key',
+    adminApiKey: '管理员 Key',
+    ipWhitelist: 'IP 白名单',
+    validity: '有效期',
+    lastUsedIp: '最后使用 IP',
+    lastRequest: '最后请求内容',
+    userId: '用户 ID',
+    globalApiSettings: '全局 API 设置'
 }
 export default zh

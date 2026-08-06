@@ -30,8 +30,48 @@ const dbInit = {
 		await this.v2_9DB(c);
 		await this.v3_0DB(c);
 		await this.v3_1DB(c);
+		await this.v3_2DB(c);
+		await this.v3_3DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_3DB(c) {
+		const column = await c.env.db
+			.prepare(`SELECT name FROM pragma_table_info('api_key') WHERE name = 'key_hash' LIMIT 1`)
+			.first();
+		if (column) {
+			await c.env.db.prepare(`
+				UPDATE api_key
+				SET status = 1,
+					revoke_time = COALESCE(revoke_time, CURRENT_TIMESTAMP)
+				WHERE api_key = '' AND status = 0
+			`).run();
+			await c.env.db.prepare(`ALTER TABLE api_key DROP COLUMN key_hash`).run();
+		}
+	},
+
+	async v3_2DB(c) {
+		const statements = [
+			`ALTER TABLE api_key ADD COLUMN api_key TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE api_key ADD COLUMN ip_whitelist TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE api_key ADD COLUMN expire_time DATETIME;`,
+			`ALTER TABLE api_key ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;`,
+			`ALTER TABLE api_key ADD COLUMN last_used_ip TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE api_key ADD COLUMN last_request TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE user ADD COLUMN account_limit INTEGER NOT NULL DEFAULT -1;`
+		];
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (error) {
+				if (!error.message?.includes('duplicate column name')) throw error;
+			}
+		}
+		await c.env.db.batch([
+			c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_api_key_admin_status ON api_key (is_admin, status)`),
+			c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_api_key_expire_time ON api_key (expire_time)`)
+		]);
 	},
 
 	async v3_1DB(c) {
@@ -51,7 +91,6 @@ const dbInit = {
 				public_id TEXT NOT NULL,
 				user_id INTEGER NOT NULL,
 				name TEXT NOT NULL COLLATE NOCASE,
-				key_hash TEXT NOT NULL,
 				key_prefix TEXT NOT NULL,
 				status INTEGER NOT NULL DEFAULT 0,
 				create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

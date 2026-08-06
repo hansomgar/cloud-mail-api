@@ -63,9 +63,12 @@ const accountService = {
 
 		if (userRow.email !== c.env.admin) {
 
-			if (roleRow.accountCount > 0) {
+			const accountLimit = userRow.accountLimit >= 0
+				? userRow.accountLimit
+				: roleRow.accountCount;
+			if (accountLimit > 0) {
 				const userAccountCount = await accountService.countUserAccount(c, userId)
-				if(userAccountCount >= roleRow.accountCount) throw new BizError(t('accountLimit'), 403);
+				if(userAccountCount >= accountLimit) throw new BizError(t('accountLimit'), 403);
 			}
 
 			if(!roleService.hasAvailDomainPerm(roleRow.availDomain, email)) {

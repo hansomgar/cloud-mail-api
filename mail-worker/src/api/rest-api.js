@@ -134,6 +134,15 @@ rest.patch('/emails/:emailId/read', async (c) => {
 	return success(c);
 });
 
+rest.delete('/emails', async (c) => {
+	const data = await restApiService.emailBatchDelete(
+		c,
+		c.get('apiAuth').userId,
+		await c.req.json()
+	);
+	return success(c, data);
+});
+
 rest.delete('/emails/:emailId', async (c) => {
 	await restApiService.emailDelete(
 		c,
@@ -159,6 +168,40 @@ rest.get('/emails/:emailId/attachments/:attachmentId', async (c) => {
 		c.req.param('emailId'),
 		c.req.param('attachmentId')
 	);
+});
+
+rest.use('/admin/*', async (c, next) => {
+	apiKeyService.ensureAdminApi(c);
+	await next();
+});
+
+rest.get('/admin/users', async (c) => {
+	return success(c, await restApiService.adminUserList(c, c.req.query()));
+});
+
+rest.post('/admin/users', async (c) => {
+	return success(c, await restApiService.adminUserCreate(c, await c.req.json()), 201);
+});
+
+rest.delete('/admin/users/:userId', async (c) => {
+	await restApiService.adminUserDelete(c, c.req.param('userId'));
+	return success(c);
+});
+
+rest.patch('/admin/users/:userId/account-limit', async (c) => {
+	return success(c, await restApiService.adminUserAccountLimit(
+		c,
+		c.req.param('userId'),
+		await c.req.json()
+	));
+});
+
+rest.get('/admin/emails', async (c) => {
+	return success(c, await restApiService.adminEmailList(c, c.req.query()));
+});
+
+rest.patch('/admin/settings', async (c) => {
+	return success(c, await restApiService.adminSettings(c, await c.req.json()));
 });
 
 rest.notFound((c) => {

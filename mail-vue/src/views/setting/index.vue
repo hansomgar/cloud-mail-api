@@ -42,7 +42,7 @@
         <el-option label="English" value="en" @pointerdown.prevent.stop="changeLang('en')"/>
       </el-select>
     </div>
-    <div class="api-key-section">
+    <div v-if="false" class="api-key-section">
       <div class="api-key-header">
         <div class="title">{{ $t('apiKeys') }}</div>
         <div class="api-key-actions">
@@ -143,7 +143,7 @@
   </div>
 </template>
 <script setup>
-import {reactive, ref, defineOptions, onMounted} from 'vue'
+import {reactive, ref, defineOptions} from 'vue'
 import {resetPassword, userDelete} from "@/request/my.js";
 import {useUserStore} from "@/store/user.js";
 import router from "@/router/index.js";
@@ -303,8 +303,6 @@ async function copyGeneratedKey() {
 function openApiDocs() {
   window.open('/api-docs.html', '_blank', 'noopener,noreferrer')
 }
-
-onMounted(loadApiKeys)
 
 const deleteConfirm = () => {
   ElMessageBox.confirm(t('delAccountConfirm'), {
