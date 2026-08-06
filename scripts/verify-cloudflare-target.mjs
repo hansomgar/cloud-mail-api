@@ -6,9 +6,9 @@ const EXPECTED = Object.freeze({
 	databaseName: 'cloud-mail-api',
 	databaseId: 'a99b0859-0c89-49de-8af1-a19b45c94e2c',
 	kvNamespaceId: '2a56f3742be04a37a0fdf8e359023ca4',
-	domain: 'mail.airoute.kdns.fr',
-	mailDomains: ['airoute.kdns.fr'],
-	admin: 'admin@airoute.kdns.fr'
+	domain: 'webmail.airoute.kdns.fr',
+	mailDomains: ['mail.airoute.kdns.fr'],
+	admin: 'admin@mail.airoute.kdns.fr'
 });
 
 const FORBIDDEN_PRODUCTION_IDS = Object.freeze([

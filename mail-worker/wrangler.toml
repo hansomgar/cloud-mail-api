@@ -7,7 +7,7 @@ keep_vars = true
 enabled = true
 
 [[routes]]
-pattern = "mail.airoute.kdns.fr"
+pattern = "webmail.airoute.kdns.fr"
 custom_domain = true
 
 [[d1_databases]]
@@ -43,8 +43,8 @@ crons = ["0 16 * * *"]	#每天晚上12点执行每日任务,刷新分析缓存
 #ai_model = ""			#ai模型,不填默认使用@cf/meta/llama-3.1-8b-instruct
 #analysis_cache = false			#是否开启分析数据缓存
 #orm_log = false			#是否sql日志
-domain = ["airoute.kdns.fr"]				#邮件域名可可配置多个 示例: ["example1.com","example2.com"]
-admin = "admin@airoute.kdns.fr"				#管理员的邮箱	示例: admin@example.com
+domain = ["mail.airoute.kdns.fr"]				#邮件域名可可配置多个 示例: ["example1.com","example2.com"]
+admin = "admin@mail.airoute.kdns.fr"				#管理员的邮箱	示例: admin@example.com
 project_link = "https://github.com/hansomgar/cloud-mail-api"
 #jwt_secret = ""			#jwt令牌的密钥,随便填一串字符串
 
