@@ -35,7 +35,7 @@ crons = ["0 16 * * *"]
 
 [vars]
 domain = ["airoute.kdns.fr"]
-admin = "admin@mail.airoute.kdns.fr"
+admin = "admin@airoute.kdns.fr"
 project_link = "https://github.com/hansomgar/cloud-mail-api"
 
 [build]
