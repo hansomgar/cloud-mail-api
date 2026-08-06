@@ -32,7 +32,7 @@ const routes = [
                 }
             },
             {
-                path: '/api-keys',
+                path: '/api-key-management',
                 name: 'api-key',
                 component: () => import('@/views/api-key/index.vue'),
                 meta: {
