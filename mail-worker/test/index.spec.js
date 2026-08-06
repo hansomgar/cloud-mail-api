@@ -26,6 +26,7 @@ async function resetDatabase() {
 
 		CREATE TABLE setting (
 			rest_api_enabled INTEGER NOT NULL DEFAULT 1,
+			admin_rest_api_enabled INTEGER NOT NULL DEFAULT 1,
 			many_email INTEGER NOT NULL DEFAULT 0,
 			add_email INTEGER NOT NULL DEFAULT 0
 		);
@@ -148,10 +149,16 @@ async function resetDatabase() {
 			last_request TEXT NOT NULL DEFAULT '',
 			revoke_time DATETIME
 		);
+		CREATE UNIQUE INDEX idx_api_key_user_type_active_name
+			ON api_key (user_id, is_admin, name COLLATE NOCASE)
+			WHERE status = 0;
 	`);
 
 	await env.db.batch([
-		env.db.prepare(`INSERT INTO setting (rest_api_enabled) VALUES (0)`),
+		env.db.prepare(`
+			INSERT INTO setting (rest_api_enabled, admin_rest_api_enabled)
+			VALUES (0, 0)
+		`),
 		env.db
 			.prepare(
 				`INSERT INTO role
@@ -315,6 +322,13 @@ async function setApiEnabled(enabled) {
 	);
 }
 
+async function setAdminApiEnabled(enabled) {
+	await env.db
+		.prepare(`UPDATE setting SET admin_rest_api_enabled = ?`)
+		.bind(enabled ? 0 : 1)
+		.run();
+}
+
 async function apiRequest(path, key = USER_ONE_KEY, init = {}) {
 	const headers = new Headers(init.headers || {});
 	if (key) {
@@ -473,8 +487,7 @@ describe('Cloud Mail API key management', () => {
 		expect(listed.list[0].apiKey).toBeTruthy();
 		expect(listed.settings).toMatchObject({
 			restApiEnabled: 0,
-			manyEmail: 0,
-			addEmail: 0
+			adminRestApiEnabled: 0
 		});
 
 		const created = await apiKeyService.create(
@@ -485,6 +498,40 @@ describe('Cloud Mail API key management', () => {
 		);
 		expect(created.isAdmin).toBe(1);
 		expect(created.apiKey).toMatch(/^cma_/);
+	});
+
+	it('keeps user and administrator key management isolated', async () => {
+		const context = serviceContext();
+		context.set('user', {userId: 1, email: 'one@example.test'});
+		env.admin = 'one@example.test';
+
+		const adminKey = await apiKeyService.create(
+			context,
+			1,
+			{name: 'User one test', permanent: true},
+			{isAdmin: true}
+		);
+		const userStatus = await apiKeyService.status(serviceContext(), 1);
+		expect(userStatus.list.every(item => item.isAdmin === 0)).toBe(true);
+		expect(userStatus.list.some(item => item.apiKeyId === adminKey.apiKeyId)).toBe(false);
+
+		await expect(apiKeyService.update(
+			serviceContext(),
+			1,
+			adminKey.apiKeyId,
+			{name: 'Not allowed from user page'}
+		)).rejects.toThrow('API key not found');
+		await expect(apiKeyService.revoke(
+			serviceContext(),
+			1,
+			adminKey.apiKeyId
+		)).rejects.toThrow('API key not found');
+
+		const userKeys = await apiKeyService.adminList(context, {isAdmin: 0});
+		const adminKeys = await apiKeyService.adminList(context, {isAdmin: 1});
+		expect(userKeys.list.every(item => item.isAdmin === 0)).toBe(true);
+		expect(adminKeys.list.every(item => item.isAdmin === 1)).toBe(true);
+		expect(adminKeys.list.some(item => item.apiKeyId === adminKey.apiKeyId)).toBe(true);
 	});
 
 	it('redacts secrets from the recorded request body', async () => {
@@ -600,6 +647,22 @@ describe('Cloud Mail REST API authentication', () => {
 
 		expect(response.status).toBe(403);
 		expect((await response.json()).error.code).toBe('FORBIDDEN');
+	});
+
+	it('controls user and administrator keys with independent switches', async () => {
+		env.admin = 'one@example.test';
+		await env.db.prepare(
+			`UPDATE api_key SET is_admin = 1 WHERE api_key_id = 1`
+		).run();
+
+		await setAdminApiEnabled(false);
+		expect((await apiRequest('/admin/users')).status).toBe(403);
+		expect((await apiRequest('/accounts', USER_TWO_KEY)).status).toBe(200);
+
+		await setAdminApiEnabled(true);
+		await setApiEnabled(false);
+		expect((await apiRequest('/admin/users')).status).toBe(200);
+		expect((await apiRequest('/accounts', USER_TWO_KEY)).status).toBe(403);
 	});
 
 	it('returns 401 for a missing or forged API key', async () => {
@@ -743,6 +806,64 @@ describe('Cloud Mail REST API ownership isolation', () => {
 			.bind(createBody.data.items[0].accountId)
 			.first();
 		expect(deleted.is_del).toBe(1);
+
+		const restoreResponse = await apiRequest('/accounts', USER_ONE_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				email: 'automation@example.test',
+				name: 'Restored automation'
+			})
+		});
+		const restored = await restoreResponse.json();
+		expect(restoreResponse.status).toBe(201);
+		expect(restored.data.items[0].accountId).toBe(createBody.data.items[0].accountId);
+		expect(restored.data.items[0].name).toBe('Restored automation');
+		expect(await env.db.prepare(
+			`SELECT user_id, status, is_del FROM account WHERE account_id = ?`
+		).bind(createBody.data.items[0].accountId).first()).toMatchObject({
+			user_id: 1,
+			status: 0,
+			is_del: 0
+		});
+	});
+
+	it('renames a child account immediately and finds new mail by the new name', async () => {
+		const rename = await apiRequest('/accounts/2', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: 'Renamed child'})
+		});
+		expect(rename.status).toBe(200);
+		expect((await rename.json()).data.name).toBe('Renamed child');
+		expect((await env.db.prepare(
+			`SELECT name FROM account WHERE account_id = 2`
+		).first()).name).toBe('Renamed child');
+
+		await env.db.prepare(`
+			INSERT INTO email
+				(email_id, send_email, name, account_id, user_id, subject, text, content,
+				 recipient, to_email, to_name, type, unread, is_del)
+			VALUES
+				(3, 'new@example.org', 'New sender', 2, 1, 'New child mail', 'Body', '<p>Body</p>',
+				 '[]', 'child@example.test', 'Renamed child', 0, 0, 0)
+		`).run();
+		const list = await apiRequest('/emails?accountName=Renamed%20child');
+		expect(list.status).toBe(200);
+		expect((await list.json()).data.items.map(item => item.emailId)).toEqual([3]);
+	});
+
+	it('does not let another user reclaim a deleted email account', async () => {
+		await env.db.prepare(`UPDATE account SET is_del = 1 WHERE account_id = 3`).run();
+		const response = await apiRequest('/accounts', USER_ONE_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'two@example.test'})
+		});
+		expect(response.status).toBe(400);
+		expect(await env.db.prepare(
+			`SELECT user_id, is_del FROM account WHERE account_id = 3`
+		).first()).toMatchObject({user_id: 2, is_del: 1});
 	});
 
 	it('creates multiple child accounts from an array', async () => {

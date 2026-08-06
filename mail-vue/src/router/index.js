@@ -32,16 +32,6 @@ const routes = [
                 }
             },
             {
-                path: '/api-key-management',
-                name: 'api-key',
-                component: () => import('@/views/api-key/index.vue'),
-                meta: {
-                    title: 'apiKeys',
-                    name: 'api-key',
-                    menu: true
-                }
-            },
-            {
                 path: '/settings',
                 name: 'setting',
                 component: () => import('@/views/setting/index.vue'),

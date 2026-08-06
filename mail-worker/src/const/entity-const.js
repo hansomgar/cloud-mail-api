@@ -8,6 +8,9 @@ export const userConst = {
 }
 
 export const accountConst = {
+	status: {
+		NORMAL: 0
+	},
 	allReceive: {
 		CLOSE: 0,
 		OPEN: 1

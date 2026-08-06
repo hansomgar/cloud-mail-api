@@ -26,11 +26,6 @@
           <Icon icon="solar:star-line-duotone" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('starred')}}</span>
         </el-menu-item>
-        <el-menu-item @click="router.push({name: 'api-key'})" index="api-key"
-                      :class="route.meta.name === 'api-key' ? 'choose-item' : ''">
-          <Icon icon="fluent:key-20-regular" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 21px">{{$t('apiKeys')}}</span>
-        </el-menu-item>
         <el-menu-item @click="router.push({name: 'setting'})" index="setting"
                       :class="route.meta.name === 'setting' ? 'choose-item' : ''">
           <Icon icon="fluent:settings-48-regular" width="20" height="20" />
@@ -64,6 +59,12 @@
           <Icon icon="fluent:fingerprint-20-filled" width="22" height="22" />
           <span class="menu-name" style="margin-left: 20px">{{$t('inviteCode')}}</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.user.type === 0"
+                      @click="router.push({name: 'api-key-admin'})" index="api-key-admin"
+                      :class="route.meta.name === 'api-key-admin' ? 'choose-item' : ''">
+          <Icon icon="fluent:key-multiple-20-regular" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 21px">{{$t('apiKeyManagement')}}</span>
+        </el-menu-item>
         <el-menu-item @click="router.push({name: 'sys-setting'})" index="sys-setting" v-perm="'setting:query'"
                       :class="route.meta.name === 'sys-setting' ? 'choose-item' : ''">
           <Icon icon="eos-icons:system-ok-outlined" width="18" height="18" style="margin-left: 2px" />
@@ -79,8 +80,10 @@ import router from "@/router/index.js";
 import { useRoute } from "vue-router";
 import {Icon} from "@iconify/vue";
 import {useSettingStore} from "@/store/setting.js";
+import {useUserStore} from "@/store/user.js";
 
 const settingStore = useSettingStore();
+const userStore = useUserStore();
 const route = useRoute();
 
 </script>

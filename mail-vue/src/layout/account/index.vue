@@ -229,7 +229,7 @@ function getSkeletonRows() {
 
 function setName() {
 
-  let name = accountName.value
+  const name = accountName.value?.trim()
 
   if (name === account.name) {
     setNameShow.value = false
@@ -246,12 +246,14 @@ function setName() {
   }
 
   setNameLoading.value = true
-  accountSetName(account.accountId, name).then(() => {
-    account.name = name
+  accountSetName(account.accountId, name).then(accountRow => {
+    account.name = accountRow.name
+    accountName.value = accountRow.name
     setNameShow.value = false
 
     if (account.accountId === userStore.user.account.accountId) {
-      userStore.user.name = name
+      userStore.user.name = accountRow.name
+      userStore.user.account.name = accountRow.name
     }
 
     ElMessage({

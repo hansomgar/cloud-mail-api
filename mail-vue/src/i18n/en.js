@@ -346,7 +346,7 @@ const en = {
     apiKeyNamePlaceholder: 'For example: Home Server',
     createApiKey: 'Create API Key',
     apiKeyOneTimeTitle: 'API Key',
-    apiKeyOneTimeDesc: 'The complete key is stored by the server and can be viewed again from the API Key page.',
+    apiKeyOneTimeDesc: 'The complete key is stored by the server and can be viewed again in Personal Settings or Administrator API Key Management.',
     apiKeyCopySuccess: 'API key copied',
     apiKeyCreated: 'API key created',
     apiKeyRevoked: 'API key revoked',
@@ -369,7 +369,17 @@ const en = {
     lastUsedIp: 'Last Used IP',
     lastRequest: 'Last Request',
     userId: 'User ID',
-    globalApiSettings: 'Global API Settings'
+    globalApiSettings: 'Global API Settings',
+    apiKeyManagement: 'API Key Management',
+    apiAccessControl: 'REST API Access Control',
+    userRestApiAccess: 'User REST API',
+    userRestApiAccessDesc: 'Controls all user keys. When disabled, keys remain stored but REST requests return 403.',
+    adminRestApiAccess: 'Administrator REST API',
+    adminRestApiAccessDesc: 'Controls all administrator keys. When disabled, admin REST requests return 403 while the web console remains available.',
+    userApiKeys: 'User API Keys',
+    adminApiKeys: 'Administrator API Keys',
+    keyOwner: 'Owner',
+    allStatuses: 'All statuses'
 }
 
 export default en

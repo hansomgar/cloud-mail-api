@@ -6,8 +6,9 @@ import BizError from '../error/biz-error';
 
 app.put('/setting/set', async (c) => {
 	const params = await c.req.json();
+	const protectedFields = ['restApiEnabled', 'adminRestApiEnabled'];
 	if (
-		Object.hasOwn(params || {}, 'restApiEnabled') &&
+		protectedFields.some(field => Object.hasOwn(params || {}, field)) &&
 		userContext.getUser(c).email !== c.env.admin
 	) {
 		throw new BizError('Only the administrator can change REST API access', 403);

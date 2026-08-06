@@ -42,54 +42,7 @@
         <el-option label="English" value="en" @pointerdown.prevent.stop="changeLang('en')"/>
       </el-select>
     </div>
-    <div v-if="false" class="api-key-section">
-      <div class="api-key-header">
-        <div class="title">{{ $t('apiKeys') }}</div>
-        <div class="api-key-actions">
-          <el-button @click="openApiDocs">{{ $t('apiDocs') }}</el-button>
-          <el-button type="primary" :disabled="!apiEnabled" @click="createKeyShow = true">
-            {{ $t('createApiKey') }}
-          </el-button>
-        </div>
-      </div>
-      <el-alert
-          v-if="!apiEnabled"
-          :title="$t('restApiDisabledDesc')"
-          type="warning"
-          :closable="false"
-          show-icon
-      />
-      <div v-else class="api-key-limit">
-        {{ $t('apiKeyLimitDesc', {count: maxActiveKeys}) }}
-      </div>
-      <div v-loading="apiKeyLoading" class="api-key-list">
-        <el-empty v-if="!apiKeyLoading && apiKeys.length === 0" :description="$t('noApiKeys')"/>
-        <div v-for="item in apiKeys" :key="item.apiKeyId" class="api-key-item">
-          <div class="api-key-main">
-            <div class="api-key-name">
-              <strong>{{ item.name }}</strong>
-              <el-tag :type="item.status === 0 ? 'success' : 'info'" size="small">
-                {{ item.status === 0 ? $t('apiKeyActive') : $t('apiKeyRevokedStatus') }}
-              </el-tag>
-            </div>
-            <code>{{ item.keyPrefix }}</code>
-            <div class="api-key-meta">
-              <span>{{ $t('apiKeyCreatedAt') }}：{{ item.createTime }}</span>
-              <span>{{ $t('apiKeyLastUsedAt') }}：{{ item.lastUsedTime || $t('apiKeyNeverUsed') }}</span>
-            </div>
-          </div>
-          <el-button
-              v-if="item.status === 0"
-              type="danger"
-              plain
-              :loading="revokingKeyId === item.apiKeyId"
-              @click="revokeKey(item)"
-          >
-            {{ $t('revokeApiKey') }}
-          </el-button>
-        </div>
-      </div>
-    </div>
+    <user-api-keys embedded class="api-key-section"/>
     <div class="del-email" v-perm="'my:delete'">
       <div class="title">{{$t('deleteUser')}}</div>
       <div style="color: var(--regular-text-color);">
@@ -99,40 +52,6 @@
         <el-button type="primary" @click="deleteConfirm">{{$t('deleteUserBtn')}}</el-button>
       </div>
     </div>
-    <el-dialog
-        v-model="createKeyShow"
-        :title="$t('createApiKey')"
-        width="400"
-        @closed="apiKeyName = ''"
-    >
-      <el-input
-          v-model="apiKeyName"
-          maxlength="50"
-          show-word-limit
-          :placeholder="$t('apiKeyNamePlaceholder')"
-          @keyup.enter="createKey"
-      />
-      <template #footer>
-        <el-button @click="createKeyShow = false">{{ $t('cancel') }}</el-button>
-        <el-button type="primary" :loading="creatingKey" @click="createKey">
-          {{ $t('createApiKey') }}
-        </el-button>
-      </template>
-    </el-dialog>
-    <el-dialog
-        v-model="generatedKeyShow"
-        :title="$t('apiKeyOneTimeTitle')"
-        width="520"
-        :close-on-click-modal="false"
-        @closed="generatedKey = ''"
-    >
-      <el-alert :title="$t('apiKeyOneTimeDesc')" type="warning" :closable="false" show-icon/>
-      <el-input v-model="generatedKey" readonly class="generated-key">
-        <template #append>
-          <el-button @click="copyGeneratedKey">{{ $t('copy') }}</el-button>
-        </template>
-      </el-input>
-    </el-dialog>
     <el-dialog v-model="pwdShow" :title="$t('changePassword')" width="340">
       <div class="update-pwd">
         <el-input type="password" :placeholder="$t('newPassword')" v-model="form.password" autocomplete="off"/>
@@ -151,7 +70,7 @@ import {accountSetName} from "@/request/account.js";
 import {useAccountStore} from "@/store/account.js";
 import {useI18n} from "vue-i18n";
 import {useSettingStore} from "@/store/setting.js";
-import {apiKeyCreate, apiKeyRevoke, apiKeyStatus} from "@/request/api-key.js";
+import UserApiKeys from "@/views/api-key/index.vue";
 
 const { t } = useI18n()
 const accountStore = useAccountStore()
@@ -161,17 +80,6 @@ const setPwdLoading = ref(false)
 const setNameShow = ref(false)
 const accountName = ref(null)
 const langSelect = ref(settingStore.lang)
-const apiKeys = ref([])
-const apiEnabled = ref(false)
-const maxActiveKeys = ref(10)
-const apiKeyLoading = ref(false)
-const createKeyShow = ref(false)
-const generatedKeyShow = ref(false)
-const apiKeyName = ref('')
-const generatedKey = ref('')
-const creatingKey = ref(false)
-const revokingKeyId = ref(null)
-
 defineOptions({
   name: 'setting'
 })
@@ -192,26 +100,27 @@ function setName() {
     return;
   }
 
-  setNameShow.value = false
-  let name = accountName.value
+  const oldName = userStore.user.name
+  const name = accountName.value.trim()
 
-  if (name === userStore.user.name) {
+  if (name === oldName) {
+    setNameShow.value = false
     return
   }
 
-  userStore.user.name = accountName.value
-
-  accountSetName(userStore.user.account.accountId,name).then(() => {
+  accountSetName(userStore.user.account.accountId, name).then(accountRow => {
+    userStore.user.name = accountRow.name
+    userStore.user.account.name = accountRow.name
+    accountStore.changeUserAccountName = accountRow.name
+    accountName.value = accountRow.name
+    setNameShow.value = false
     ElMessage({
       message: t('saveSuccessMsg'),
       type: 'success',
       plain: true,
     })
-
-    accountStore.changeUserAccountName = name
-
   }).catch(() => {
-    userStore.user.name = name
+    accountName.value = oldName
   })
 }
 
@@ -231,78 +140,6 @@ const form = reactive({
   password: '',
   newPwd: '',
 })
-
-function loadApiKeys() {
-  apiKeyLoading.value = true
-  apiKeyStatus().then(data => {
-    apiEnabled.value = data.enabled
-    maxActiveKeys.value = data.maxActiveKeys
-    apiKeys.value = data.list
-  }).finally(() => {
-    apiKeyLoading.value = false
-  })
-}
-
-function createKey() {
-  const name = apiKeyName.value.trim()
-  if (!name || creatingKey.value) return
-
-  creatingKey.value = true
-  apiKeyCreate(name).then(data => {
-    generatedKey.value = data.key
-    createKeyShow.value = false
-    generatedKeyShow.value = true
-    ElMessage({
-      message: t('apiKeyCreated'),
-      type: 'success',
-      plain: true
-    })
-    loadApiKeys()
-  }).finally(() => {
-    creatingKey.value = false
-  })
-}
-
-function revokeKey(item) {
-  ElMessageBox.confirm(t('revokeApiKeyConfirm'), {
-    confirmButtonText: t('confirm'),
-    cancelButtonText: t('cancel'),
-    type: 'warning'
-  }).then(() => {
-    revokingKeyId.value = item.apiKeyId
-    apiKeyRevoke(item.apiKeyId).then(() => {
-      ElMessage({
-        message: t('apiKeyRevoked'),
-        type: 'success',
-        plain: true
-      })
-      loadApiKeys()
-    }).finally(() => {
-      revokingKeyId.value = null
-    })
-  })
-}
-
-async function copyGeneratedKey() {
-  try {
-    await navigator.clipboard.writeText(generatedKey.value)
-    ElMessage({
-      message: t('apiKeyCopySuccess'),
-      type: 'success',
-      plain: true
-    })
-  } catch {
-    ElMessage({
-      message: t('copyFailMsg'),
-      type: 'error',
-      plain: true
-    })
-  }
-}
-
-function openApiDocs() {
-  window.open('/api-docs.html', '_blank', 'noopener,noreferrer')
-}
 
 const deleteConfirm = () => {
   ElMessageBox.confirm(t('delAccountConfirm'), {

@@ -63,7 +63,8 @@ const WRITABLE_SETTING_FIELDS = new Set([
 	'blackFrom',
 	'aiCode',
 	'aiCodeFilter',
-	'restApiEnabled'
+	'restApiEnabled',
+	'adminRestApiEnabled'
 ]);
 
 const settingService = {
@@ -89,6 +90,9 @@ const settingService = {
 
 		if (setting.restApiEnabled === undefined) {
 			setting.restApiEnabled = 1;
+		}
+		if (setting.adminRestApiEnabled === undefined) {
+			setting.adminRestApiEnabled = 1;
 		}
 
 		let domainList = c.env.domain;

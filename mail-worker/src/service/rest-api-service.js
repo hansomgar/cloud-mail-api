@@ -267,18 +267,29 @@ const restApiService = {
 			throw new BizError('At least one of name or allReceive is required', 400);
 		}
 
-		const row = await orm(c)
-			.update(account)
-			.set(updates)
-			.where(
-				and(
-					eq(account.accountId, current.accountId),
-					eq(account.userId, userId),
-					eq(account.isDel, isDel.NORMAL)
+		let row = current;
+		if (Object.hasOwn(updates, 'name')) {
+			row = await accountService.setName(
+				c,
+				{ accountId: current.accountId, name: updates.name },
+				userId
+			);
+			delete updates.name;
+		}
+		if (Object.keys(updates).length) {
+			row = await orm(c)
+				.update(account)
+				.set(updates)
+				.where(
+					and(
+						eq(account.accountId, current.accountId),
+						eq(account.userId, userId),
+						eq(account.isDel, isDel.NORMAL)
+					)
 				)
-			)
-			.returning()
-			.get();
+				.returning()
+				.get();
+		}
 
 		return publicAccount(row);
 	},
@@ -576,6 +587,7 @@ const restApiService = {
 	async adminSettings(c, body) {
 		const fields = {
 			restApiEnabled: 'rest_api_enabled',
+			adminRestApiEnabled: 'admin_rest_api_enabled',
 			manyEmail: 'many_email',
 			addEmail: 'add_email'
 		};

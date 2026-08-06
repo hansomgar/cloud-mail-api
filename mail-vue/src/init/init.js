@@ -46,6 +46,18 @@ export async function init() {
             routers.forEach(routerData => {
                 router.addRoute('layout', routerData);
             });
+            if (user.type === 0 && !router.hasRoute('api-key-admin')) {
+                router.addRoute('layout', {
+                    path: '/api-key-management',
+                    name: 'api-key-admin',
+                    component: () => import('@/views/api-key-admin/index.vue'),
+                    meta: {
+                        title: 'apiKeyManagement',
+                        name: 'api-key-admin',
+                        menu: true
+                    }
+                });
+            }
         }
 
     } else {

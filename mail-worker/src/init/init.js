@@ -32,8 +32,28 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_4DB(c) {
+		const column = await c.env.db
+			.prepare(`SELECT name FROM pragma_table_info('setting') WHERE name = 'admin_rest_api_enabled' LIMIT 1`)
+			.first();
+		if (!column) {
+			await c.env.db
+				.prepare(`ALTER TABLE setting ADD COLUMN admin_rest_api_enabled INTEGER NOT NULL DEFAULT 1;`)
+				.run();
+		}
+		await c.env.db.batch([
+			c.env.db.prepare(`DROP INDEX IF EXISTS idx_api_key_user_active_name`),
+			c.env.db.prepare(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_api_key_user_type_active_name
+				ON api_key (user_id, is_admin, name COLLATE NOCASE)
+				WHERE status = 0
+			`)
+		]);
 	},
 
 	async v3_3DB(c) {

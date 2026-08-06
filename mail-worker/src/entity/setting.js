@@ -52,6 +52,7 @@ export const setting = sqliteTable('setting', {
 	blackFrom: text('black_from').default('').notNull(),
 	aiCode: integer('ai_code').default(1).notNull(),
 	aiCodeFilter: text('ai_code_filter').default('').notNull(),
-	restApiEnabled: integer('rest_api_enabled').default(1).notNull()
+	restApiEnabled: integer('rest_api_enabled').default(1).notNull(),
+	adminRestApiEnabled: integer('admin_rest_api_enabled').default(1).notNull()
 });
 export default setting

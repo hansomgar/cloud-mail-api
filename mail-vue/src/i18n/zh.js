@@ -346,7 +346,7 @@ const zh = {
     apiKeyNamePlaceholder: '例如：家中服务器',
     createApiKey: '创建 API Key',
     apiKeyOneTimeTitle: 'API Key',
-    apiKeyOneTimeDesc: '完整 Key 会保存在服务端，可在 API Key 菜单中再次查看。',
+    apiKeyOneTimeDesc: '完整 Key 会保存在服务端，可在个人设置或管理员 API Key 管理页中再次查看。',
     apiKeyCopySuccess: 'API Key 已复制',
     apiKeyCreated: 'API Key 创建成功',
     apiKeyRevoked: 'API Key 已吊销',
@@ -369,6 +369,16 @@ const zh = {
     lastUsedIp: '最后使用 IP',
     lastRequest: '最后请求内容',
     userId: '用户 ID',
-    globalApiSettings: '全局 API 设置'
+    globalApiSettings: '全局 API 设置',
+    apiKeyManagement: 'API Key 管理',
+    apiAccessControl: 'REST API 访问控制',
+    userRestApiAccess: '用户 REST API',
+    userRestApiAccessDesc: '控制所有用户 Key；关闭后用户 Key 保留，但调用 REST API 会返回 403',
+    adminRestApiAccess: '管理员 REST API',
+    adminRestApiAccessDesc: '控制所有管理员 Key；关闭后管理员 Key 保留且无法调用管理员 REST API，网页后台不受影响',
+    userApiKeys: '用户 API Key',
+    adminApiKeys: '管理员 API Key',
+    keyOwner: '所属用户',
+    allStatuses: '全部状态'
 }
 export default zh

@@ -21,6 +21,17 @@ const accountService = {
 		const skipHumanVerification = options.skipHumanVerification === true;
 
 		let { email, token } = params;
+		email = typeof email === 'string' ? email.trim() : email;
+		let requestedName;
+		if (params.name !== undefined) {
+			requestedName = typeof params.name === 'string' ? params.name.trim() : '';
+			if (!requestedName) {
+				throw new BizError('Account name must not be empty', 400);
+			}
+			if (requestedName.length > 30) {
+				throw new BizError(t('usernameLengthLimit'), 400);
+			}
+		}
 
 
 		if (!(addEmail === settingConst.addEmail.OPEN && manyEmail === settingConst.manyEmail.OPEN)) {
@@ -50,11 +61,10 @@ const accountService = {
 
 		let accountRow = await this.selectByEmailIncludeDel(c, email);
 
-		if (accountRow && accountRow.isDel === isDel.DELETE) {
-			throw new BizError(t('isDelAccount'));
+		if (accountRow && accountRow.isDel === isDel.NORMAL) {
+			throw new BizError(t('isRegAccount'));
 		}
-
-		if (accountRow) {
+		if (accountRow && Number(accountRow.userId) !== Number(userId)) {
 			throw new BizError(t('isRegAccount'));
 		}
 
@@ -92,7 +102,37 @@ const accountService = {
 		}
 
 
-		accountRow = await orm(c).insert(account).values({ email: email, userId: userId, name: emailUtils.getName(email) }).returning().get();
+		if (accountRow) {
+			accountRow = await orm(c)
+				.update(account)
+				.set({
+					isDel: isDel.NORMAL,
+					status: accountConst.status.NORMAL,
+					allReceive: accountConst.allReceive.CLOSE,
+					sort: 0,
+					name: requestedName || accountRow.name || emailUtils.getName(email)
+				})
+				.where(and(
+					eq(account.accountId, accountRow.accountId),
+					eq(account.userId, userId),
+					eq(account.isDel, isDel.DELETE)
+				))
+				.returning()
+				.get();
+			if (!accountRow) {
+				throw new BizError(t('isRegAccount'), 409);
+			}
+		} else {
+			accountRow = await orm(c)
+				.insert(account)
+				.values({
+					email,
+					userId,
+					name: requestedName || emailUtils.getName(email)
+				})
+				.returning()
+				.get();
+		}
 
 		if (!skipHumanVerification && addEmailVerify === settingConst.addEmailVerify.COUNT && !addVerifyOpen) {
 			const row = await verifyRecordService.increaseAddCount(c);
@@ -150,6 +190,9 @@ const accountService = {
 
 		const user = await userService.selectById(c, userId);
 		const accountRow = await this.selectById(c, accountId);
+		if (!accountRow) {
+			throw new BizError(t('noUserAccount'), 404);
+		}
 
 		if (accountRow.email === user.email) {
 			throw new BizError(t('delMyAccount'));
@@ -159,7 +202,10 @@ const accountService = {
 			throw new BizError(t('noUserAccount'));
 		}
 
-		await orm(c).update(account).set({ isDel: isDel.DELETE }).where(
+		await orm(c).update(account).set({
+			isDel: isDel.DELETE,
+			allReceive: accountConst.allReceive.CLOSE
+		}).where(
 			and(eq(account.userId, userId),
 				eq(account.accountId, accountId)))
 			.run();
@@ -214,11 +260,31 @@ const accountService = {
 	},
 
 	async setName(c, params, userId) {
-		const { name, accountId } = params
-		if (name.length > 30) {
-			throw new BizError(t('usernameLengthLimit'));
+		const accountId = Number(params?.accountId);
+		const name = typeof params?.name === 'string' ? params.name.trim() : '';
+		if (!Number.isInteger(accountId) || accountId <= 0) {
+			throw new BizError('Invalid account ID', 400);
 		}
-		await orm(c).update(account).set({name}).where(and(eq(account.userId, userId),eq(account.accountId, accountId))).run();
+		if (!name) {
+			throw new BizError('Account name must not be empty', 400);
+		}
+		if (name.length > 30) {
+			throw new BizError(t('usernameLengthLimit'), 400);
+		}
+		const row = await orm(c)
+			.update(account)
+			.set({ name })
+			.where(and(
+				eq(account.userId, userId),
+				eq(account.accountId, accountId),
+				eq(account.isDel, isDel.NORMAL)
+			))
+			.returning()
+			.get();
+		if (!row) {
+			throw new BizError(t('noUserAccount'), 404);
+		}
+		return row;
 	},
 
 	async allAccount(c, params) {

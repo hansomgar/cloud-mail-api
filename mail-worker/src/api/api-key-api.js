@@ -56,12 +56,18 @@ app.patch('/admin/api-keys/:apiKeyId', async (c) => {
 		c,
 		userContext.getUserId(c),
 		c.req.param('apiKeyId'),
-		await c.req.json()
+		await c.req.json(),
+		{ adminMode: true }
 	);
 	return c.json(result.ok(data));
 });
 
 app.delete('/admin/api-keys/:apiKeyId', async (c) => {
-	await apiKeyService.revoke(c, userContext.getUserId(c), c.req.param('apiKeyId'));
+	await apiKeyService.revoke(
+		c,
+		userContext.getUserId(c),
+		c.req.param('apiKeyId'),
+		{ adminMode: true }
+	);
 	return c.json(result.ok());
 });

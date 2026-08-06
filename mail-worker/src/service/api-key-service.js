@@ -111,16 +111,39 @@ function publicRow(row) {
 	};
 }
 
-async function isRestApiEnabled(c) {
+async function apiAccessSettings(c) {
 	const row = await c.env.db
-		.prepare(`SELECT rest_api_enabled AS enabled FROM setting LIMIT 1`)
+		.prepare(`
+			SELECT
+				rest_api_enabled AS user_enabled,
+				admin_rest_api_enabled AS admin_enabled
+			FROM setting
+			LIMIT 1
+		`)
 		.first();
-	return row?.enabled === 0;
+	return {
+		userEnabled: row?.user_enabled === 0,
+		adminEnabled: row?.admin_enabled === 0
+	};
+}
+
+async function isRestApiEnabled(c) {
+	return (await apiAccessSettings(c)).userEnabled;
+}
+
+async function isAdminRestApiEnabled(c) {
+	return (await apiAccessSettings(c)).adminEnabled;
 }
 
 async function ensureRestApiEnabled(c) {
 	if (!await isRestApiEnabled(c)) {
-		throw new BizError('REST API is disabled by the administrator', 403);
+		throw new BizError('User REST API is disabled by the administrator', 403);
+	}
+}
+
+async function ensureAdminRestApiEnabled(c) {
+	if (!await isAdminRestApiEnabled(c)) {
+		throw new BizError('Administrator REST API is disabled', 403);
 	}
 }
 
@@ -186,7 +209,7 @@ const apiKeyService = {
 			orm(c)
 				.select()
 				.from(apiKey)
-				.where(eq(apiKey.userId, userId))
+				.where(and(eq(apiKey.userId, userId), eq(apiKey.isAdmin, 0)))
 				.orderBy(desc(apiKey.apiKeyId))
 				.all()
 		]);
@@ -206,6 +229,13 @@ const apiKeyService = {
 		if (params.status !== undefined && params.status !== '') {
 			conditions.push(eq(apiKey.status, Number(params.status)));
 		}
+		if (params.isAdmin !== undefined && params.isAdmin !== '') {
+			const isAdmin = Number(params.isAdmin);
+			if (![0, 1].includes(isAdmin)) {
+				throw new BizError('isAdmin must be 0 or 1', 400);
+			}
+			conditions.push(eq(apiKey.isAdmin, isAdmin));
+		}
 		const rows = await orm(c)
 			.select({ ...apiKey, userEmail: user.email })
 			.from(apiKey)
@@ -215,14 +245,14 @@ const apiKeyService = {
 			.limit(500)
 			.all();
 		const settings = await c.env.db.prepare(
-			`SELECT rest_api_enabled, many_email, add_email FROM setting LIMIT 1`
+			`SELECT rest_api_enabled, admin_rest_api_enabled FROM setting LIMIT 1`
 		).first();
 		return {
 			enabled: settings?.rest_api_enabled === 0,
+			adminEnabled: settings?.admin_rest_api_enabled === 0,
 			settings: {
 				restApiEnabled: settings?.rest_api_enabled ?? 1,
-				manyEmail: settings?.many_email ?? 1,
-				addEmail: settings?.add_email ?? 1
+				adminRestApiEnabled: settings?.admin_rest_api_enabled ?? 1
 			},
 			list: rows.map(publicRow)
 		};
@@ -243,13 +273,19 @@ const apiKeyService = {
 			throw new BizError('API key name is required and must not exceed 50 characters', 400);
 		}
 
+		const keyType = isAdmin ? 1 : 0;
 		const [{ total }, existing] = await Promise.all([
 			orm(c).select({ total: count() }).from(apiKey).where(
-				and(eq(apiKey.userId, userId), eq(apiKey.status, API_KEY_ACTIVE))
+				and(
+					eq(apiKey.userId, userId),
+					eq(apiKey.isAdmin, keyType),
+					eq(apiKey.status, API_KEY_ACTIVE)
+				)
 			).get(),
 			orm(c).select({ apiKeyId: apiKey.apiKeyId }).from(apiKey).where(
 				and(
 					eq(apiKey.userId, userId),
+					eq(apiKey.isAdmin, keyType),
 					eq(apiKey.status, API_KEY_ACTIVE),
 					sql`${apiKey.name} COLLATE NOCASE = ${name}`
 				)
@@ -270,19 +306,21 @@ const apiKeyService = {
 			apiKey: token,
 			ipWhitelist: normalizeWhitelist(params.ipWhitelist),
 			expireTime: parseExpireTime(params),
-			isAdmin: isAdmin ? 1 : 0,
+			isAdmin: keyType,
 			status: API_KEY_ACTIVE
 		}).returning().get();
 		return publicRow(row);
 	},
 
-	async update(c, actorUserId, apiKeyId, params = {}) {
+	async update(c, actorUserId, apiKeyId, params = {}, options = {}) {
 		apiKeyId = Number(apiKeyId);
 		const row = await orm(c).select().from(apiKey).where(eq(apiKey.apiKeyId, apiKeyId)).get();
 		if (!row) throw new BizError('API key not found', 404);
-		const current = c.get('user');
-		const admin = current?.email === c.env.admin;
-		if (row.userId !== actorUserId && !admin) throw new BizError('API key not found', 404);
+		if (options.adminMode === true) {
+			ensureWebAdmin(c);
+		} else if (row.userId !== actorUserId || row.isAdmin !== 0) {
+			throw new BizError('API key not found', 404);
+		}
 		const values = {};
 		if (params.name !== undefined) {
 			const name = String(params.name).trim();
@@ -300,12 +338,15 @@ const apiKeyService = {
 		return publicRow({ ...row, ...values });
 	},
 
-	async revoke(c, actorUserId, apiKeyId) {
+	async revoke(c, actorUserId, apiKeyId, options = {}) {
 		apiKeyId = Number(apiKeyId);
 		const row = await orm(c).select().from(apiKey).where(eq(apiKey.apiKeyId, apiKeyId)).get();
 		if (!row) throw new BizError('API key not found', 404);
-		const admin = c.get('user')?.email === c.env.admin;
-		if (row.userId !== actorUserId && !admin) throw new BizError('API key not found', 404);
+		if (options.adminMode === true) {
+			ensureWebAdmin(c);
+		} else if (row.userId !== actorUserId || row.isAdmin !== 0) {
+			throw new BizError('API key not found', 404);
+		}
 		await orm(c).update(apiKey).set({
 			status: API_KEY_REVOKED,
 			revokeTime: dayjs().format('YYYY-MM-DD HH:mm:ss')
@@ -326,9 +367,13 @@ const apiKeyService = {
 			throw new BizError('API key has expired', 401);
 		}
 		const userRow = await owner(c, row.userId);
-		if (!row.isAdmin) await ensureRestApiEnabled(c);
-		if (row.isAdmin && userRow.email !== c.env.admin) {
-			throw new BizError('Invalid administrator API key', 403);
+		if (row.isAdmin) {
+			if (userRow.email !== c.env.admin) {
+				throw new BizError('Invalid administrator API key', 403);
+			}
+			await ensureAdminRestApiEnabled(c);
+		} else {
+			await ensureRestApiEnabled(c);
 		}
 		const whitelist = row.ipWhitelist.split(',').filter(Boolean);
 		const ip = requestIp(c);
@@ -355,7 +400,9 @@ const apiKeyService = {
 	},
 
 	isRestApiEnabled,
-	ensureRestApiEnabled
+	isAdminRestApiEnabled,
+	ensureRestApiEnabled,
+	ensureAdminRestApiEnabled
 };
 
 export default apiKeyService;
