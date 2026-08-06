@@ -34,7 +34,7 @@ run_worker_first = true
 crons = ["0 16 * * *"]
 
 [vars]
-domain = ["mail.airoute.kdns.fr", "airoute.kdns.fr"]
+domain = ["airoute.kdns.fr"]
 admin = "admin@mail.airoute.kdns.fr"
 project_link = "https://github.com/hansomgar/cloud-mail-api"
 
