@@ -379,7 +379,27 @@ const en = {
     userApiKeys: 'User API Keys',
     adminApiKeys: 'Administrator API Keys',
     keyOwner: 'Owner',
-    allStatuses: 'All statuses'
+    allStatuses: 'All statuses',
+    changeAccountName: 'Change Username',
+    changeAccountEmail: 'Change Email Name',
+    changeAccountEmailDesc: 'The username resets to the new email prefix and the old address is archived.',
+    archivedAccounts: 'Archived Emails',
+    archivedAccountsDesc: 'View your deleted and renamed child email addresses.',
+    adminArchivedAccountsDesc: 'View and manage archived email addresses for all users.',
+    archiveType: 'Archive Type',
+    deletedAccountArchive: 'Deleted Child Email',
+    renamedAccountArchive: 'Renamed Child Email',
+    primaryEmail: 'Primary Email',
+    archivedEmail: 'Archived Email',
+    originalAccountName: 'Original Username',
+    linkedCurrentEmail: 'Linked Current Email',
+    archiveTime: 'Archived At',
+    noArchivedAccounts: 'No archived email addresses',
+    permanentDelete: 'Delete Permanently',
+    permanentDeleteSelected: 'Delete Selected Permanently',
+    permanentDeleteArchiveWarning: 'Permanent deletion cannot be undone. It releases the address and deletes related message history and attachments.',
+    permanentDeleteArchiveConfirm: 'Permanently delete the selected {count} archive records?',
+    permanentDeleteSuccess: 'Permanently deleted {count} archive records'
 }
 
 export default en

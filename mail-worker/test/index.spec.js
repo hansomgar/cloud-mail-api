@@ -17,8 +17,10 @@ async function resetDatabase() {
 	await env.db.exec(`
 		DROP TABLE IF EXISTS api_key;
 		DROP TABLE IF EXISTS oauth;
+		DROP TABLE IF EXISTS star;
 		DROP TABLE IF EXISTS attachments;
 		DROP TABLE IF EXISTS email;
+		DROP TABLE IF EXISTS account_archive;
 		DROP TABLE IF EXISTS account;
 		DROP TABLE IF EXISTS role;
 		DROP TABLE IF EXISTS setting;
@@ -79,8 +81,23 @@ async function resetDatabase() {
 			user_id INTEGER NOT NULL,
 			all_receive INTEGER NOT NULL DEFAULT 0,
 			sort INTEGER NOT NULL DEFAULT 0,
+			archive_time DATETIME,
 			is_del INTEGER NOT NULL DEFAULT 0
 		);
+		CREATE UNIQUE INDEX idx_account_email_nocase
+			ON account (email COLLATE NOCASE);
+
+		CREATE TABLE account_archive (
+			archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			account_id INTEGER NOT NULL,
+			email TEXT NOT NULL COLLATE NOCASE,
+			name TEXT NOT NULL DEFAULT '',
+			archive_type INTEGER NOT NULL DEFAULT 1,
+			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE UNIQUE INDEX idx_account_archive_email_nocase
+			ON account_archive (email COLLATE NOCASE);
 
 		CREATE TABLE email (
 			email_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,6 +124,13 @@ async function resetDatabase() {
 			unread INTEGER NOT NULL DEFAULT 0,
 			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			is_del INTEGER NOT NULL DEFAULT 0
+		);
+
+		CREATE TABLE star (
+			star_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			email_id INTEGER NOT NULL,
+			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
 		CREATE TABLE attachments (
@@ -851,6 +875,291 @@ describe('Cloud Mail REST API ownership isolation', () => {
 		const list = await apiRequest('/emails?accountName=Renamed%20child');
 		expect(list.status).toBe(200);
 		expect((await list.json()).data.items.map(item => item.emailId)).toEqual([3]);
+	});
+
+	it('changes a child email address separately from its username and archives the old address', async () => {
+		await env.db.prepare(`
+			INSERT INTO email
+				(email_id, send_email, name, account_id, user_id, subject, text, content,
+				 recipient, to_email, to_name, type, unread, is_del)
+			VALUES
+				(3, 'old-sender@example.org', 'Old sender', 2, 1, 'Old address mail',
+				 'Old', '<p>Old</p>', '[]', 'child@example.test', 'Child', 0, 0, 0)
+		`).run();
+
+		const username = await apiRequest('/accounts/2', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: 'Display only'})
+		});
+		expect(username.status).toBe(200);
+		expect(await env.db.prepare(
+			`SELECT email, name FROM account WHERE account_id = 2`
+		).first()).toMatchObject({
+			email: 'child@example.test',
+			name: 'Display only'
+		});
+
+		const changed = await apiRequest('/accounts/2', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'renamed@example.test'})
+		});
+		const changedBody = await changed.json();
+		expect(changed.status).toBe(200);
+		expect(changedBody.data).toMatchObject({
+			accountId: 2,
+			email: 'renamed@example.test',
+			name: 'renamed'
+		});
+
+		const archiveResponse = await apiRequest('/account-archives?archiveType=renamed');
+		const archive = await archiveResponse.json();
+		expect(archiveResponse.status).toBe(200);
+		expect(archive.data.items).toHaveLength(1);
+		expect(archive.data.items[0]).toMatchObject({
+			archiveType: 'renamed',
+			accountId: 2,
+			email: 'child@example.test',
+			name: 'Display only',
+			currentEmail: 'renamed@example.test',
+			primaryEmail: 'one@example.test'
+		});
+
+		await env.db.prepare(`
+			INSERT INTO email
+				(email_id, send_email, name, account_id, user_id, subject, text, content,
+				 recipient, to_email, to_name, type, unread, is_del)
+			VALUES
+				(4, 'new-sender@example.org', 'New sender', 2, 1, 'New address mail',
+				 'New', '<p>New</p>', '[]', 'renamed@example.test', 'renamed', 0, 0, 0)
+		`).run();
+		const emails = await apiRequest('/emails?accountName=renamed%40example.test');
+		expect(emails.status).toBe(200);
+		expect((await emails.json()).data.items.map(item => item.emailId)).toEqual([4, 3]);
+
+		const otherUserClaim = await apiRequest('/accounts', USER_TWO_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'child@example.test'})
+		});
+		expect(otherUserClaim.status).toBe(400);
+
+		const primary = await apiRequest('/accounts/1', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'new-primary@example.test'})
+		});
+		expect(primary.status).toBe(409);
+
+		const mixed = await apiRequest('/accounts/2', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'mixed@example.test', name: 'Mixed'})
+		});
+		expect(mixed.status).toBe(400);
+	});
+
+	it('permanently deletes a deleted child archive and releases its address', async () => {
+		await env.db.batch([
+			env.db.prepare(`
+				INSERT INTO email
+					(email_id, send_email, name, account_id, user_id, subject, text, content,
+					 recipient, to_email, to_name, type, unread, is_del)
+				VALUES
+					(3, 'archive@example.org', 'Archive', 2, 1, 'Archived message',
+					 'Body', '<p>Body</p>', '[]', 'child@example.test', 'Child', 0, 0, 0)
+			`),
+			env.db.prepare(`
+				INSERT INTO attachments
+					(att_id, user_id, email_id, account_id, key, filename, mime_type, size)
+				VALUES
+					(3, 1, 3, 2, 'attachments/archived.txt', 'archived.txt', 'text/plain', 8)
+			`),
+			env.db.prepare(`INSERT INTO star (star_id, user_id, email_id) VALUES (1, 1, 3)`)
+		]);
+		await env.kv.put('attachments/archived.txt', new TextEncoder().encode('archived'));
+
+		expect((await apiRequest('/accounts/2', USER_ONE_KEY, {method: 'DELETE'})).status).toBe(200);
+		const list = await apiRequest('/account-archives?archiveType=deleted');
+		const listBody = await list.json();
+		expect(list.status).toBe(200);
+		expect(listBody.data.items[0]).toMatchObject({
+			archiveType: 'deleted',
+			archiveId: 2,
+			email: 'child@example.test'
+		});
+		expect(listBody.data.items[0].archiveTime).toBeTruthy();
+
+		const denied = await apiRequest('/account-archives', USER_TWO_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				items: [{archiveType: 'deleted', archiveId: 2}]
+			})
+		});
+		expect(denied.status).toBe(404);
+		expect(await env.db.prepare(
+			`SELECT account_id FROM account WHERE account_id = 2`
+		).first()).toBeTruthy();
+
+		const removed = await apiRequest('/account-archives', USER_ONE_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				items: [{archiveType: 'deleted', archiveId: 2}]
+			})
+		});
+		expect(removed.status).toBe(200);
+		expect((await removed.json()).data.deleted).toBe(1);
+		expect(await env.db.prepare(
+			`SELECT account_id FROM account WHERE account_id = 2`
+		).first()).toBeNull();
+		expect(await env.db.prepare(
+			`SELECT email_id FROM email WHERE email_id = 3`
+		).first()).toBeNull();
+		expect(await env.db.prepare(
+			`SELECT att_id FROM attachments WHERE att_id = 3`
+		).first()).toBeNull();
+		expect(await env.db.prepare(
+			`SELECT star_id FROM star WHERE star_id = 1`
+		).first()).toBeNull();
+		expect(await env.kv.get('attachments/archived.txt')).toBeNull();
+
+		const claimed = await apiRequest('/accounts', USER_TWO_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'child@example.test'})
+		});
+		expect(claimed.status).toBe(201);
+		expect((await claimed.json()).data.items[0].email).toBe('child@example.test');
+		expect((await env.db.prepare(
+			`SELECT user_id FROM account WHERE email = 'child@example.test'`
+		).first()).user_id).toBe(2);
+	});
+
+	it('permanently deletes only old-address history from a renamed archive', async () => {
+		await env.db.batch([
+			env.db.prepare(`
+				INSERT INTO email
+					(email_id, send_email, name, account_id, user_id, subject, text, content,
+					 recipient, to_email, to_name, type, unread, is_del)
+				VALUES
+					(3, 'old@example.org', 'Old', 2, 1, 'Old history',
+					 'Old', '<p>Old</p>', '[]', 'child@example.test', 'Child', 0, 0, 0)
+			`),
+			env.db.prepare(`
+				INSERT INTO attachments
+					(att_id, user_id, email_id, account_id, key, filename, mime_type, size)
+				VALUES
+					(3, 1, 3, 2, 'attachments/old-history.txt', 'old.txt', 'text/plain', 3)
+			`),
+			env.db.prepare(`INSERT INTO star (star_id, user_id, email_id) VALUES (1, 1, 3)`)
+		]);
+		await env.kv.put('attachments/old-history.txt', new TextEncoder().encode('old'));
+
+		const rename = await apiRequest('/accounts/2', USER_ONE_KEY, {
+			method: 'PATCH',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'current@example.test'})
+		});
+		expect(rename.status).toBe(200);
+		await env.db.prepare(`
+			INSERT INTO email
+				(email_id, send_email, name, account_id, user_id, subject, text, content,
+				 recipient, to_email, to_name, type, unread, is_del)
+			VALUES
+				(4, 'new@example.org', 'New', 2, 1, 'Current history',
+				 'New', '<p>New</p>', '[]', 'current@example.test', 'current', 0, 0, 0)
+		`).run();
+
+		const archives = await apiRequest('/account-archives?archiveType=renamed');
+		const archive = (await archives.json()).data.items[0];
+		const removed = await apiRequest('/account-archives', USER_ONE_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				items: [{archiveType: 'renamed', archiveId: archive.archiveId}]
+			})
+		});
+		expect(removed.status).toBe(200);
+		expect(await env.db.prepare(`SELECT email_id FROM email WHERE email_id = 3`).first()).toBeNull();
+		expect(await env.db.prepare(`SELECT att_id FROM attachments WHERE att_id = 3`).first()).toBeNull();
+		expect(await env.db.prepare(`SELECT star_id FROM star WHERE star_id = 1`).first()).toBeNull();
+		expect(await env.kv.get('attachments/old-history.txt')).toBeNull();
+		expect(await env.db.prepare(`SELECT email_id FROM email WHERE email_id = 4`).first()).toBeTruthy();
+		expect(await env.db.prepare(
+			`SELECT email, name, is_del FROM account WHERE account_id = 2`
+		).first()).toMatchObject({
+			email: 'current@example.test',
+			name: 'current',
+			is_del: 0
+		});
+
+		const released = await apiRequest('/accounts', USER_TWO_KEY, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({email: 'child@example.test'})
+		});
+		expect(released.status).toBe(201);
+	});
+
+	it('validates every archive before a batch permanent delete', async () => {
+		await apiRequest('/accounts/2', USER_ONE_KEY, {method: 'DELETE'});
+		await env.db.prepare(`
+			INSERT INTO account
+				(account_id, email, name, user_id, archive_time, is_del)
+			VALUES
+				(4, 'other-child@example.test', 'Other child', 2, CURRENT_TIMESTAMP, 1)
+		`).run();
+
+		const denied = await apiRequest('/account-archives', USER_ONE_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				items: [
+					{archiveType: 'deleted', archiveId: 2},
+					{archiveType: 'deleted', archiveId: 4}
+				]
+			})
+		});
+		expect(denied.status).toBe(404);
+		expect(await env.db.prepare(`SELECT account_id FROM account WHERE account_id = 2`).first()).toBeTruthy();
+		expect(await env.db.prepare(`SELECT account_id FROM account WHERE account_id = 4`).first()).toBeTruthy();
+	});
+
+	it('lets an administrator list and permanently delete another user archive', async () => {
+		env.admin = 'one@example.test';
+		await env.db.prepare(`UPDATE api_key SET is_admin = 1 WHERE api_key_id = 1`).run();
+		await env.db.prepare(`
+			INSERT INTO account
+				(account_id, email, name, user_id, archive_time, is_del)
+			VALUES
+				(4, 'other-child@example.test', 'Other child', 2, CURRENT_TIMESTAMP, 1)
+		`).run();
+
+		const list = await apiRequest(
+			'/admin/account-archives?userId=2&archiveType=deleted',
+			USER_ONE_KEY
+		);
+		const listBody = await list.json();
+		expect(list.status).toBe(200);
+		expect(listBody.data.items).toHaveLength(1);
+		expect(listBody.data.items[0]).toMatchObject({
+			userId: 2,
+			primaryEmail: 'two@example.test',
+			email: 'other-child@example.test'
+		});
+
+		const removed = await apiRequest('/admin/account-archives', USER_ONE_KEY, {
+			method: 'DELETE',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({
+				items: [{archiveType: 'deleted', archiveId: 4}]
+			})
+		});
+		expect(removed.status).toBe(200);
+		expect(await env.db.prepare(`SELECT account_id FROM account WHERE account_id = 4`).first()).toBeNull();
 	});
 
 	it('does not let another user reclaim a deleted email account', async () => {

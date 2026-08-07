@@ -42,6 +42,16 @@ const routes = [
                 }
             },
             {
+                path: '/archived-accounts',
+                name: 'account-archive',
+                component: () => import('@/views/account-archive/index.vue'),
+                meta: {
+                    title: 'archivedAccounts',
+                    name: 'account-archive',
+                    menu: true
+                }
+            },
+            {
                 path: '/starred',
                 name: 'star',
                 component: () => import('@/views/star/index.vue'),

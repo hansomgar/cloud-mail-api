@@ -12,6 +12,8 @@ import turnstileService from './turnstile-service';
 import roleService from './role-service';
 import { t } from '../i18n/i18n';
 import verifyRecordService from './verify-record-service';
+import accountArchiveService from './account-archive-service';
+import dayjs from 'dayjs';
 
 const accountService = {
 
@@ -60,11 +62,15 @@ const accountService = {
 		}
 
 		let accountRow = await this.selectByEmailIncludeDel(c, email);
+		const archivedRow = await accountArchiveService.selectByEmail(c, email);
 
 		if (accountRow && accountRow.isDel === isDel.NORMAL) {
 			throw new BizError(t('isRegAccount'));
 		}
-		if (accountRow && Number(accountRow.userId) !== Number(userId)) {
+		if (
+			(accountRow && Number(accountRow.userId) !== Number(userId)) ||
+			(archivedRow && Number(archivedRow.userId) !== Number(userId))
+		) {
 			throw new BizError(t('isRegAccount'));
 		}
 
@@ -110,6 +116,7 @@ const accountService = {
 					status: accountConst.status.NORMAL,
 					allReceive: accountConst.allReceive.CLOSE,
 					sort: 0,
+					archiveTime: null,
 					name: requestedName || accountRow.name || emailUtils.getName(email)
 				})
 				.where(and(
@@ -132,6 +139,9 @@ const accountService = {
 				})
 				.returning()
 				.get();
+		}
+		if (archivedRow) {
+			await accountArchiveService.consume(c, archivedRow, accountRow.accountId);
 		}
 
 		if (!skipHumanVerification && addEmailVerify === settingConst.addEmailVerify.COUNT && !addVerifyOpen) {
@@ -204,7 +214,8 @@ const accountService = {
 
 		await orm(c).update(account).set({
 			isDel: isDel.DELETE,
-			allReceive: accountConst.allReceive.CLOSE
+			allReceive: accountConst.allReceive.CLOSE,
+			archiveTime: dayjs().format('YYYY-MM-DD HH:mm:ss')
 		}).where(
 			and(eq(account.userId, userId),
 				eq(account.accountId, accountId)))
@@ -228,6 +239,7 @@ const accountService = {
 
 	async physicsDeleteByUserIds(c, userIds) {
 		await emailService.physicsDeleteUserIds(c, userIds);
+		await accountArchiveService.deleteByUserIds(c, userIds);
 		await orm(c).delete(account).where(inArray(account.userId,userIds)).run();
 	},
 
@@ -252,11 +264,17 @@ const accountService = {
 	},
 
 	async restoreByEmail(c, email) {
-		await orm(c).update(account).set({isDel: isDel.NORMAL}).where(eq(account.email, email)).run();
+		await orm(c).update(account).set({
+			isDel: isDel.NORMAL,
+			archiveTime: null
+		}).where(eq(account.email, email)).run();
 	},
 
 	async restoreByUserId(c, userId) {
-		await orm(c).update(account).set({isDel: isDel.NORMAL}).where(eq(account.userId, userId)).run();
+		await orm(c).update(account).set({
+			isDel: isDel.NORMAL,
+			archiveTime: null
+		}).where(eq(account.userId, userId)).run();
 	},
 
 	async setName(c, params, userId) {
@@ -287,6 +305,115 @@ const accountService = {
 		return row;
 	},
 
+	async setEmail(c, params, userId) {
+		const accountId = Number(params?.accountId);
+		const email = typeof params?.email === 'string'
+			? params.email.trim().toLowerCase()
+			: '';
+		if (!Number.isInteger(accountId) || accountId <= 0) {
+			throw new BizError('Invalid account ID', 400);
+		}
+		if (!email || !verifyUtils.isEmail(email)) {
+			throw new BizError(t('notEmail'), 400);
+		}
+		const current = await this.selectById(c, accountId);
+		if (!current || Number(current.userId) !== Number(userId)) {
+			throw new BizError(t('noUserAccount'), 404);
+		}
+		const userRow = await userService.selectById(c, userId);
+		if (current.email.toLowerCase() === userRow.email.toLowerCase()) {
+			throw new BizError('The primary account email cannot be changed', 409);
+		}
+		if (current.email.toLowerCase() === email) {
+			throw new BizError('The new email address must be different', 400);
+		}
+
+		const { minEmailPrefix, emailPrefixFilter } = await settingService.query(c);
+		const domain = emailUtils.getDomain(email);
+		const prefix = emailUtils.getName(email);
+		if (!c.env.domain.includes(domain)) {
+			throw new BizError(t('notExistDomain'), 400);
+		}
+		if (prefix.length < minEmailPrefix) {
+			throw new BizError(t('minEmailPrefix', { msg: minEmailPrefix }), 400);
+		}
+		if (emailPrefixFilter.some(content => prefix.includes(content))) {
+			throw new BizError(t('banEmailPrefix'), 400);
+		}
+		if (userRow.email !== c.env.admin) {
+			const roleRow = await roleService.selectById(c, userRow.type);
+			if (!roleService.hasAvailDomainPerm(roleRow.availDomain, email)) {
+				throw new BizError(t('noDomainPermAdd'), 403);
+			}
+		}
+
+		const [existing, archived] = await Promise.all([
+			this.selectByEmailIncludeDel(c, email),
+			accountArchiveService.selectByEmail(c, email)
+		]);
+		if (existing && Number(existing.accountId) !== accountId) {
+			throw new BizError(t('isRegAccount'), 409);
+		}
+		if (archived && Number(archived.userId) !== Number(userId)) {
+			throw new BizError(t('isRegAccount'), 409);
+		}
+
+		const statements = [];
+		if (archived && Number(archived.accountId) !== accountId) {
+			statements.push(
+				c.env.db.prepare(`
+					UPDATE attachments
+					SET account_id = ?
+					WHERE email_id IN (
+						SELECT email_id FROM email
+						WHERE user_id = ? AND account_id = ?
+						  AND (
+							to_email COLLATE NOCASE = ?
+							OR send_email COLLATE NOCASE = ?
+						  )
+					)
+				`).bind(accountId, userId, archived.accountId, email, email),
+				c.env.db.prepare(`
+					UPDATE email
+					SET account_id = ?
+					WHERE user_id = ? AND account_id = ?
+					  AND (
+						to_email COLLATE NOCASE = ?
+						OR send_email COLLATE NOCASE = ?
+					  )
+				`).bind(accountId, userId, archived.accountId, email, email)
+			);
+		}
+		if (archived) {
+			statements.push(
+				c.env.db.prepare(`
+					DELETE FROM account_archive
+					WHERE archive_id = ? AND user_id = ?
+				`).bind(archived.archiveId, userId)
+			);
+		}
+		statements.push(
+			c.env.db.prepare(`
+				INSERT INTO account_archive
+					(user_id, account_id, email, name, archive_type)
+				VALUES (?, ?, ?, ?, ?)
+			`).bind(
+				userId,
+				accountId,
+				current.email,
+				current.name,
+				accountArchiveService.ARCHIVE_RENAMED
+			),
+			c.env.db.prepare(`
+				UPDATE account
+				SET email = ?, name = ?, archive_time = NULL
+				WHERE account_id = ? AND user_id = ? AND is_del = 0
+			`).bind(email, prefix, accountId, userId)
+		);
+		await c.env.db.batch(statements);
+		return this.selectById(c, accountId);
+	},
+
 	async allAccount(c, params) {
 
 		let { userId, num, size } = params
@@ -313,6 +440,7 @@ const accountService = {
 	async physicsDelete(c, params) {
 		const { accountId } = params
 		await emailService.physicsDeleteByAccountId(c, accountId)
+		await accountArchiveService.deleteByAccountId(c, accountId)
 		await orm(c).delete(account).where(eq(account.accountId, accountId)).run();
 	},
 

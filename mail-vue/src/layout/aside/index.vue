@@ -31,6 +31,12 @@
           <Icon icon="fluent:settings-48-regular" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('settings')}}</span>
         </el-menu-item>
+        <el-menu-item @click="router.push({name: 'account-archive'})" index="account-archive"
+                      v-perm="'account:query'"
+                      :class="route.meta.name === 'account-archive' ? 'choose-item' : ''">
+          <Icon icon="solar:archive-linear" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 21px">{{$t('archivedAccounts')}}</span>
+        </el-menu-item>
         <div class="manage-title" v-perm="['all-email:query','user:query','role:query','setting:query','analysis:query','reg-key:query']">
           <div>{{$t('manage')}}</div>
         </div>
@@ -43,6 +49,12 @@
                       :class="route.meta.name === 'user' ? 'choose-item' : ''">
           <Icon icon="si:user-alt-2-line" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('allUsers')}}</span>
+        </el-menu-item>
+        <el-menu-item @click="router.push({name: 'admin-account-archive'})" index="admin-account-archive"
+                      v-perm="'all-email:query'"
+                      :class="route.meta.name === 'admin-account-archive' ? 'choose-item' : ''">
+          <Icon icon="solar:archive-linear" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 21px">{{$t('archivedAccounts')}}</span>
         </el-menu-item>
         <el-menu-item @click="router.push({name: 'all-email'})" index="all-email" v-perm="'all-email:query'"
                       :class="route.meta.name === 'all-email' ? 'choose-item' : ''">

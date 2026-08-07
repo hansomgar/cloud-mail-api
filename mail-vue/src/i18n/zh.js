@@ -379,6 +379,26 @@ const zh = {
     userApiKeys: '用户 API Key',
     adminApiKeys: '管理员 API Key',
     keyOwner: '所属用户',
-    allStatuses: '全部状态'
+    allStatuses: '全部状态',
+    changeAccountName: '修改用户名',
+    changeAccountEmail: '修改邮箱名',
+    changeAccountEmailDesc: '修改后用户名会重置为新邮箱前缀，旧地址进入归档邮箱',
+    archivedAccounts: '归档邮箱',
+    archivedAccountsDesc: '查看当前用户已删除和已改名的子邮箱',
+    adminArchivedAccountsDesc: '查看和管理全部用户的归档子邮箱',
+    archiveType: '归档类型',
+    deletedAccountArchive: '已删除子邮箱',
+    renamedAccountArchive: '已改名子邮箱',
+    primaryEmail: '所属主邮箱',
+    archivedEmail: '归档邮箱地址',
+    originalAccountName: '原用户名',
+    linkedCurrentEmail: '关联当前邮箱',
+    archiveTime: '归档时间',
+    noArchivedAccounts: '暂无归档邮箱',
+    permanentDelete: '彻底删除',
+    permanentDeleteSelected: '批量彻底删除',
+    permanentDeleteArchiveWarning: '彻底删除不可恢复，将释放邮箱地址，并删除对应历史邮件和附件',
+    permanentDeleteArchiveConfirm: '确定彻底删除选中的 {count} 条归档吗？',
+    permanentDeleteSuccess: '已彻底删除 {count} 条归档'
 }
 export default zh

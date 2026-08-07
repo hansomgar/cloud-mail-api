@@ -11,6 +11,7 @@
           <div class="account">
             {{ item.email }}
           </div>
+          <div class="account-name">{{ item.name }}</div>
           <div class="opt">
             <div class="send-email" @click.stop>
               <Icon @click="setAllReceive(item)" v-if="!item.allReceive" icon="eva:email-fill" width="22" height="22" color="#fccb1a"/>
@@ -24,7 +25,9 @@
                 <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="hasPerm('account:query')" @click="openSetName(item)">{{ $t('changeAccountName') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="item.accountId !== userStore.user.account.accountId && hasPerm('account:add')"
+                                      @click="openSetEmail(item)">{{ $t('changeAccountEmail') }}</el-dropdown-item>
                     <el-dropdown-item v-if="item.accountId !== userStore.user.account.accountId" @click="setAsTop(item, index)">{{ $t('pin') }}</el-dropdown-item>
                     <el-dropdown-item v-if="item.accountId !== userStore.user.account.accountId && hasPerm('account:delete')"
                                       @click="remove(item)">{{ $t('delete') }}
@@ -114,11 +117,26 @@
         <span style="font-size: 12px;color: #F56C6C" v-if="botJsError">{{ $t('verifyModuleFailed') }}</span>
       </div>
     </el-dialog>
-    <el-dialog v-model="setNameShow" :title="$t('changeUserName')">
+    <el-dialog v-model="setNameShow" :title="$t('changeAccountName')">
       <div class="container">
         <el-input v-model="accountName" type="text" :placeholder="$t('username')" autocomplete="off">
         </el-input>
         <el-button class="btn" type="primary" @click="setName" :loading="setNameLoading"
+        >{{ $t('save') }}
+        </el-button>
+      </div>
+    </el-dialog>
+    <el-dialog v-model="setEmailShow" :title="$t('changeAccountEmail')">
+      <div class="container">
+        <el-input v-model="emailName" type="text" :placeholder="$t('emailPrefix')" autocomplete="off">
+          <template #append>
+            <el-select v-model="emailSuffix" style="width: 190px">
+              <el-option v-for="item in domainList" :key="item" :label="item" :value="item"/>
+            </el-select>
+          </template>
+        </el-input>
+        <el-alert :title="$t('changeAccountEmailDesc')" type="warning" :closable="false" show-icon/>
+        <el-button class="btn" type="primary" @click="setEmail" :loading="setEmailLoading"
         >{{ $t('save') }}
         </el-button>
       </div>
@@ -133,6 +151,7 @@ import {
   accountAdd,
   accountDelete,
   accountSetName,
+  accountSetEmail,
   accountSetAllReceive,
   accountSetAsTop
 } from "@/request/account.js";
@@ -161,7 +180,11 @@ const followLoading = ref(false);
 const verifyShow = ref(false)
 const setNameShow = ref(false)
 const setNameLoading = ref(false)
+const setEmailShow = ref(false)
+const setEmailLoading = ref(false)
 const accountName = ref(null)
+const emailName = ref('')
+const emailSuffix = ref('')
 const addRef = ref({})
 const scrollbarRef = ref({})
 let account = null
@@ -272,6 +295,34 @@ function openSetName(accountItem) {
   setNameShow.value = true
 }
 
+function openSetEmail(accountItem) {
+  account = accountItem
+  const atIndex = accountItem.email.lastIndexOf('@')
+  emailName.value = accountItem.email.slice(0, atIndex)
+  emailSuffix.value = accountItem.email.slice(atIndex)
+  setEmailShow.value = true
+}
+
+function setEmail() {
+  const prefix = emailName.value.trim()
+  const email = prefix + emailSuffix.value
+  if (!prefix || !isEmail(email)) {
+    ElMessage.error(t('notEmailMsg'))
+    return
+  }
+  setEmailLoading.value = true
+  accountSetEmail(account.accountId, email).then(accountRow => {
+    Object.assign(account, accountRow)
+    if (accountStore.currentAccountId === account.accountId) {
+      accountStore.currentAccount = account
+    }
+    setEmailShow.value = false
+    ElMessage.success(t('saveSuccessMsg'))
+  }).finally(() => {
+    setEmailLoading.value = false
+  })
+}
+
 function setAllReceive(account) {
   let allReceiveAccount = accounts.find(account => account.allReceive === AccountAllReceiveEnum.ENABLED);
   if (allReceiveAccount && allReceiveAccount.accountId !== account.accountId) allReceiveAccount.allReceive = AccountAllReceiveEnum.DISABLED;
@@ -295,7 +346,11 @@ function setAllReceive(account) {
 
 
 function showNullSetting(item) {
-  return !hasPerm('email:send') && !(item.accountId !== userStore.user.account.accountId && hasPerm('account:delete'))
+  const canRename = hasPerm('account:query')
+  const canChangeEmail = item.accountId !== userStore.user.account.accountId && hasPerm('account:add')
+  const canDelete = item.accountId !== userStore.user.account.accountId && hasPerm('account:delete')
+  const canPin = item.accountId !== userStore.user.account.accountId
+  return !(canRename || canChangeEmail || canDelete || canPin)
 }
 
 function itemBg(accountId) {
@@ -591,6 +646,16 @@ path[fill="#ffdda1"] {
     .account {
       font-weight: 600;
       margin-bottom: 20px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .account-name {
+      color: var(--regular-text-color);
+      font-size: 12px;
+      margin-top: -14px;
+      margin-bottom: 12px;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;

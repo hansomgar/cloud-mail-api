@@ -3,6 +3,7 @@ import app from '../hono/hono';
 import BizError from '../error/biz-error';
 import apiKeyService from '../service/api-key-service';
 import restApiService from '../service/rest-api-service';
+import accountArchiveService from '../service/account-archive-service';
 
 const rest = new Hono();
 
@@ -107,6 +108,22 @@ rest.delete('/accounts/:accountId', async (c) => {
 	return success(c);
 });
 
+rest.get('/account-archives', async (c) => {
+	return success(c, await accountArchiveService.list(
+		c,
+		c.req.query(),
+		c.get('apiAuth').userId
+	));
+});
+
+rest.delete('/account-archives', async (c) => {
+	return success(c, await accountArchiveService.permanentDelete(
+		c,
+		await c.req.json(),
+		c.get('apiAuth').userId
+	));
+});
+
 rest.get('/emails', async (c) => {
 	const data = await restApiService.emailList(
 		c,
@@ -198,6 +215,24 @@ rest.patch('/admin/users/:userId/account-limit', async (c) => {
 
 rest.get('/admin/emails', async (c) => {
 	return success(c, await restApiService.adminEmailList(c, c.req.query()));
+});
+
+rest.get('/admin/account-archives', async (c) => {
+	return success(c, await accountArchiveService.list(
+		c,
+		c.req.query(),
+		null,
+		{ adminMode: true }
+	));
+});
+
+rest.delete('/admin/account-archives', async (c) => {
+	return success(c, await accountArchiveService.permanentDelete(
+		c,
+		await c.req.json(),
+		null,
+		{ adminMode: true }
+	));
 });
 
 rest.patch('/admin/settings', async (c) => {

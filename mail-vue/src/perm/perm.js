@@ -99,16 +99,28 @@ const routers = {
             menu: true
         }
     }],
-    'all-email:query': [{
-        path: '/all-mail',
-        name: 'all-email',
-        component: () => import('@/views/all-email/index.vue'),
-        meta: {
-            title: 'allMail',
+    'all-email:query': [
+        {
+            path: '/all-mail',
             name: 'all-email',
-            menu: true
+            component: () => import('@/views/all-email/index.vue'),
+            meta: {
+                title: 'allMail',
+                name: 'all-email',
+                menu: true
+            }
+        },
+        {
+            path: '/all-account-archives',
+            name: 'admin-account-archive',
+            component: () => import('@/views/account-archive/admin.vue'),
+            meta: {
+                title: 'archivedAccounts',
+                name: 'admin-account-archive',
+                menu: true
+            }
         }
-    }],
+    ],
     'analysis:query': [{
         path: '/analysis',
         name: 'analysis',

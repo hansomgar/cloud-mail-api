@@ -3,7 +3,7 @@
   "info": {
     "title": "Cloud Mail REST API",
     "version": "2.0.0",
-    "description": "Cloud Mail REST API。用户 Key 与管理员 Key 分开管理，并分别受用户 REST API 和管理员 REST API 开关控制。"
+    "description": "Cloud Mail REST API。用户 Key 与管理员 Key 分开管理，并分别受独立开关控制。用户可分别修改邮箱用户名和真实子邮箱地址，并管理已删除、已改名邮箱归档。"
   },
   "servers": [
     {
@@ -228,8 +228,8 @@
     },
     "/accounts/{accountId}": {
       "patch": {
-        "summary": "修改邮箱账号",
-        "description": "name 会立即修改本人有效邮箱账号的显示名称（去除首尾空格，最长 30 个字符）；后续新邮件仍归属同一 accountId，并可用新名称筛选。allReceive 为 0/1，用于设置聚合收件账号。只能访问 API Key 所属用户自己的资源。",
+        "summary": "修改邮箱用户名或真实地址",
+        "description": "传 name 只修改显示用户名；传 email 修改真实子邮箱地址，主邮箱禁止修改。修改真实地址后 accountId 不变，name 自动重置为新邮箱前缀，旧地址进入改名归档；新地址来信继续归入原账号。email 不能与 name 或 allReceive 同时提交。allReceive 为 0/1，用于设置聚合收件账号。只能访问 API Key 所属用户自己的资源。",
         "operationId": "patch_accounts_accountId",
         "parameters": [
           {
@@ -277,7 +277,7 @@
           {
             "lang": "Shell",
             "label": "curl",
-            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"name\":\"Automation\",\"allReceive\":0}'"
+            "source": "curl --request PATCH \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"email\":\"renamed@mail.airoute.kdns.fr\"}'"
           }
         ],
         "requestBody": {
@@ -285,26 +285,43 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "minProperties": 1,
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 30
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "minProperties": 1,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                      },
+                      "allReceive": {
+                        "type": "integer",
+                        "enum": [
+                          0,
+                          1
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
                   },
-                  "allReceive": {
-                    "type": "integer",
-                    "enum": [
-                      0,
-                      1
-                    ]
+                  {
+                    "type": "object",
+                    "required": [
+                      "email"
+                    ],
+                    "properties": {
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    },
+                    "additionalProperties": false
                   }
-                }
+                ]
               },
               "example": {
-                "name": "Automation",
-                "allReceive": 0
+                "email": "renamed@mail.airoute.kdns.fr"
               }
             }
           }
@@ -312,7 +329,7 @@
       },
       "delete": {
         "summary": "删除子邮箱账号",
-        "description": "软删除本人子邮箱账号并关闭聚合收件；主账号不能删除。删除后可由原所有者通过 POST /accounts 使用相同邮箱地址恢复，历史邮件状态不变，新邮件可继续接收。只能访问 API Key 所属用户自己的资源。",
+        "description": "软删除本人子邮箱账号并关闭聚合收件；主账号不能删除。删除后地址进入归档，只有原所有者可通过 POST /accounts 恢复。归档被彻底删除前，其他用户不能占用该地址；彻底删除后账号历史邮件和附件不可恢复，地址重新公开可用。只能访问 API Key 所属用户自己的资源。",
         "operationId": "delete_accounts_accountId",
         "parameters": [
           {
@@ -361,6 +378,192 @@
             "lang": "Shell",
             "label": "curl",
             "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/accounts/2\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/account-archives": {
+      "get": {
+        "summary": "查询本人归档邮箱",
+        "description": "合并查询本人已删除子邮箱和已改名旧地址。归档仍保留地址所有权，其他用户不能占用。只能访问 API Key 所属用户自己的资源。",
+        "operationId": "get_account_archives",
+        "parameters": [
+          {
+            "name": "archiveType",
+            "in": "query",
+            "required": false,
+            "description": "归档类型：deleted=已删除子邮箱，renamed=已改名旧地址。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "deleted",
+                "renamed"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "按归档邮箱地址模糊筛选。",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "偏移游标，第一页省略或传 0。",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页数量，1-100，默认 20。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "example": 20
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/account-archives?archiveType=renamed&limit=20\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      },
+      "delete": {
+        "summary": "批量彻底删除本人归档",
+        "description": "一次彻底删除 1-100 条本人归档。已删除子邮箱会连同全部历史邮件和附件删除；已改名归档只删除该旧地址对应历史，当前新邮箱不受影响。操作不可恢复，删除后地址重新公开可用。所有记录会先完成所有权校验，任一越权则整批拒绝。",
+        "operationId": "delete_account_archives",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "archiveType",
+                        "archiveId"
+                      ],
+                      "properties": {
+                        "archiveType": {
+                          "type": "string",
+                          "enum": [
+                            "deleted",
+                            "renamed"
+                          ]
+                        },
+                        "archiveId": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "example": {
+                "items": [
+                  {
+                    "archiveType": "deleted",
+                    "archiveId": 12
+                  },
+                  {
+                    "archiveType": "renamed",
+                    "archiveId": 35
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/account-archives\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"items\":[{\"archiveType\":\"deleted\",\"archiveId\":12}]}'"
           }
         ]
       }
@@ -1215,6 +1418,211 @@
             "lang": "Shell",
             "label": "curl",
             "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/emails?limit=50&userEmail=user%40mail.airoute.kdns.fr&accountName=user%40mail.airoute.kdns.fr&startTime=2026-08-01+00%3A00%3A00&endTime=2026-08-31+23%3A59%3A59\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      }
+    },
+    "/admin/account-archives": {
+      "get": {
+        "summary": "管理员查询全站归档邮箱",
+        "description": "查询所有用户已删除和已改名的子邮箱，返回归属用户 ID、主邮箱及关联当前邮箱。必须使用管理员专用 API Key。",
+        "operationId": "get_admin_account_archives",
+        "parameters": [
+          {
+            "name": "archiveType",
+            "in": "query",
+            "required": false,
+            "description": "归档类型：deleted=已删除子邮箱，renamed=已改名旧地址。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "deleted",
+                "renamed"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "按归档邮箱地址模糊筛选。",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "偏移游标，第一页省略或传 0。",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页数量，1-100，默认 20。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "example": 20
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "按归属用户 ID 精确筛选。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "userEmail",
+            "in": "query",
+            "required": false,
+            "description": "按所属主邮箱模糊筛选。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request GET \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/account-archives?userId=2&limit=20\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""
+          }
+        ]
+      },
+      "delete": {
+        "summary": "管理员批量彻底删除归档",
+        "description": "管理员一次彻底删除 1-100 条任意用户归档，清除对应历史邮件和附件并释放地址。操作不可恢复。必须使用管理员专用 API Key。",
+        "operationId": "delete_admin_account_archives",
+        "parameters": [],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "archiveType",
+                        "archiveId"
+                      ],
+                      "properties": {
+                        "archiveType": {
+                          "type": "string",
+                          "enum": [
+                            "deleted",
+                            "renamed"
+                          ]
+                        },
+                        "archiveId": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "example": {
+                "items": [
+                  {
+                    "archiveType": "deleted",
+                    "archiveId": 12
+                  },
+                  {
+                    "archiveType": "renamed",
+                    "archiveId": 35
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl --request DELETE \\\n  --url \"https://mail.airoute.kdns.fr/api/v1/admin/account-archives\" \\\n  --header \"Authorization: Bearer YOUR_API_KEY\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"items\":[{\"archiveType\":\"renamed\",\"archiveId\":35}]}'"
           }
         ]
       }

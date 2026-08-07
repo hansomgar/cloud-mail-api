@@ -33,8 +33,50 @@ const dbInit = {
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
 		await this.v3_4DB(c);
+		await this.v3_5DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_5DB(c) {
+		const archiveTimeColumn = await c.env.db
+			.prepare(`SELECT name FROM pragma_table_info('account') WHERE name = 'archive_time' LIMIT 1`)
+			.first();
+		if (!archiveTimeColumn) {
+			await c.env.db
+				.prepare(`ALTER TABLE account ADD COLUMN archive_time DATETIME`)
+				.run();
+		}
+		await c.env.db.batch([
+			c.env.db.prepare(`
+				UPDATE account
+				SET archive_time = COALESCE(create_time, CURRENT_TIMESTAMP)
+				WHERE is_del = 1 AND archive_time IS NULL
+			`),
+			c.env.db.prepare(`
+				CREATE TABLE IF NOT EXISTS account_archive (
+					archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+					user_id INTEGER NOT NULL,
+					account_id INTEGER NOT NULL,
+					email TEXT NOT NULL COLLATE NOCASE,
+					name TEXT NOT NULL DEFAULT '',
+					archive_type INTEGER NOT NULL DEFAULT 1,
+					create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)
+			`),
+			c.env.db.prepare(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_account_archive_email_nocase
+				ON account_archive (email COLLATE NOCASE)
+			`),
+			c.env.db.prepare(`
+				CREATE INDEX IF NOT EXISTS idx_account_archive_user_type_time
+				ON account_archive (user_id, archive_type, create_time DESC)
+			`),
+			c.env.db.prepare(`
+				CREATE INDEX IF NOT EXISTS idx_account_archive_account
+				ON account_archive (account_id)
+			`)
+		]);
 	},
 
 	async v3_4DB(c) {

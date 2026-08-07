@@ -233,6 +233,19 @@ const restApiService = {
 
 	async accountUpdate(c, userId, accountId, body) {
 		const current = await ownedAccount(c, userId, accountId);
+		if (Object.hasOwn(body || {}, 'email')) {
+			if (
+				Object.hasOwn(body || {}, 'name') ||
+				Object.hasOwn(body || {}, 'allReceive')
+			) {
+				throw new BizError('email cannot be combined with name or allReceive', 400);
+			}
+			return publicAccount(await accountService.setEmail(
+				c,
+				{ accountId: current.accountId, email: body.email },
+				userId
+			));
+		}
 		const updates = {};
 
 		if (Object.hasOwn(body || {}, 'name')) {
@@ -304,16 +317,7 @@ const restApiService = {
 			throw new BizError('The primary account cannot be deleted', 409);
 		}
 
-		await orm(c)
-			.update(account)
-			.set({ isDel: isDel.DELETE, allReceive: accountConst.allReceive.CLOSE })
-			.where(
-				and(
-					eq(account.accountId, accountRow.accountId),
-					eq(account.userId, userId)
-				)
-			)
-			.run();
+		await accountService.delete(c, { accountId: accountRow.accountId }, userId);
 	},
 
 	async emailList(c, userId, query) {
